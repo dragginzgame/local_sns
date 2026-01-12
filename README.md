@@ -1,6 +1,6 @@
 # Local SNS Deployment Tool
 
-> requires --system-canisters supported DFX version (dfx 0.30.1 or higher)
+> **Important**: Requires dfx version 0.30.1 or higher that supports the `--system-canisters` flag
 
 Standalone Rust tool for deploying and managing Service Nervous System (SNS) instances on local `dfx` networks.
 
@@ -15,25 +15,30 @@ local_sns/
 ├── .gitignore             # Git ignore rules for generated files
 ├── src/                   # Rust source code
 │   ├── main.rs            # Main entry point
-│   ├── commands.rs        # CLI command handlers
-│   ├── constants.rs       # Constants and configuration
-│   ├── data_output.rs     # Deployment data serialization
-│   ├── deployment.rs      # Core SNS deployment logic
-│   ├── declarations/      # Candid type definitions
-│   │   ├── icp_governance.rs
-│   │   ├── icp_ledger.rs
-│   │   ├── sns_governance.rs
-│   │   ├── sns_swap.rs
-│   │   └── sns_wasm.rs
-│   ├── ops/               # Operation modules
-│   │   ├── governance_ops.rs
-│   │   ├── identity.rs
-│   │   ├── ledger_ops.rs
-│   │   ├── sns_governance_ops.rs
-│   │   ├── snsw_ops.rs
-│   │   └── swap_ops.rs
-│   └── utils/             # Utility functions
-│       └── mod.rs
+│   ├── init/              # SNS initialization configuration
+│   │   ├── mod.rs
+│   │   ├── sns_config.rs  # SNS parameters and configuration
+│   │   └── logo.png       # Logo file (PNG format)
+│   ├── core/
+│   │   ├── declarations/  # Candid type definitions
+│   │   │   ├── icp_governance.rs
+│   │   │   ├── icp_ledger.rs
+│   │   │   ├── sns_governance.rs
+│   │   │   ├── sns_swap.rs
+│   │   │   └── sns_wasm.rs
+│   │   ├── ops/           # Operation modules
+│   │   │   ├── commands.rs        # CLI command handlers
+│   │   │   ├── deployment.rs      # Core SNS deployment logic
+│   │   │   ├── governance_ops.rs
+│   │   │   ├── identity.rs
+│   │   │   ├── ledger_ops.rs
+│   │   │   ├── sns_governance_ops.rs
+│   │   │   ├── snsw_ops.rs
+│   │   │   └── swap_ops.rs
+│   │   └── utils/         # Utility functions
+│   │       ├── mod.rs
+│   │       ├── constants.rs       # Constants and configuration
+│   │       └── data_output.rs     # Deployment data serialization
 ├── scripts/               # Bash wrapper scripts
 │   ├── deploy_local_sns.sh
 │   ├── add_sns_hotkey.sh
@@ -50,11 +55,14 @@ local_sns/
 ## Prerequisites
 
 - **Rust toolchain**: Install from [rustup.rs](https://rustup.rs/)
-- **dfx SDK**: Internet Computer SDK installed and configured
+- **dfx SDK**: Internet Computer SDK version **0.30.1 or higher** that supports the `--system-canisters` flag
 - **Local dfx network**: Must be running with system canisters
+
   ```bash
   dfx start --clean --system-canisters
   ```
+
+  > **Note**: The `--system-canisters` flag is required. Older versions of dfx do not support this flag.
 
 ## Quick Start
 
@@ -95,6 +103,32 @@ cargo run --bin local_sns -- set-icp-visibility <true|false>
 # Get ICP neuron information
 cargo run --bin local_sns -- get-icp-neuron [neuron_id]
 ```
+
+## SNS Configuration
+
+The SNS deployment parameters can be customized in `src/init/sns_config.rs`. This file contains all the configuration for your SNS including:
+
+- **Basic Information**: Name, description, and URL
+- **Ledger Parameters**: Token symbol, name, and transaction fees
+- **Governance Parameters**: Voting periods, dissolve delays, and neuron configuration
+- **Swap Parameters**: Participation requirements, minimum/maximum ICP amounts, and duration
+- **Token Distribution**: Treasury, developer, and swap allocations
+
+### Logo Configuration
+
+The tool automatically loads a logo from `src/init/logo.png` (PNG format). The logo is:
+
+- Converted to base64 format automatically
+- Used for both the SNS logo and token logo
+- Falls back to a default logo if the file is not found
+
+To customize your SNS logo:
+
+1. Place a PNG image file named `logo.png` in the `src/init/` directory
+2. The logo will be automatically loaded and used during deployment
+3. If no logo is found, the deployment will use a default logo and print an info message
+
+> **Note**: The logo file must be in PNG format. The tool will automatically handle the base64 encoding.
 
 ## Generated Files
 
@@ -190,7 +224,7 @@ Uses standard NNS canister IDs for local development:
 ## Identity Management
 
 - **Owner Identity**: Loaded from `~/.config/dfx/identity/default/identity.pem`
-- **Minting Identity**: Hardcoded PEM in `src/ops/identity.rs` (used for funding operations)
+- **Minting Identity**: Hardcoded PEM in `src/core/ops/identity.rs` (used for funding operations)
 - **Participant Identities**: Deterministic seeds saved to `generated/participants/` for reuse
 
 ## Building

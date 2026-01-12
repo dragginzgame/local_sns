@@ -1,11 +1,12 @@
 mod core;
+mod init;
 
 use anyhow::Result;
 
-use core::commands::{
+use core::ops::commands::{
     handle_add_hotkey, handle_get_icp_neuron, handle_list_neurons, handle_set_icp_visibility,
 };
-use core::deployment::deploy_sns;
+use core::ops::deployment::deploy_sns;
 
 #[tokio::main]
 async fn main() -> Result<()> {

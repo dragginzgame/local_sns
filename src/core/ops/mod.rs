@@ -1,5 +1,7 @@
 // Operations modules for interacting with different canisters
 
+pub mod commands;
+pub mod deployment;
 pub mod governance_ops;
 pub mod identity;
 pub mod ledger_ops;

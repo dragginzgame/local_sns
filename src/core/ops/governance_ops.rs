@@ -5,13 +5,10 @@ use candid::{Decode, Principal, encode_args};
 use ic_agent::Agent;
 
 use super::super::declarations::icp_governance::{
-    AddHotKey, By, ClaimOrRefresh, ClaimOrRefreshResponse, Command1, Configure, Countries,
-    CreateServiceNervousSystem, DeveloperDistribution, Duration, GovernanceParameters, Image,
-    IncreaseDissolveDelay, InitialTokenDistribution, LedgerParameters, MakeProposalRequest,
-    MakeProposalResponse, ManageNeuronCommandRequest, ManageNeuronRequest, ManageNeuronResponse,
-    NeuronBasketConstructionParameters, NeuronDistribution, NeuronId, Operation, Percentage,
-    ProposalActionRequest, ProposalId, SetVisibility, SwapDistribution, SwapParameters, Tokens,
-    VotingRewardParameters,
+    AddHotKey, By, ClaimOrRefresh, ClaimOrRefreshResponse, Command1, Configure,
+    IncreaseDissolveDelay, MakeProposalRequest, MakeProposalResponse, ManageNeuronCommandRequest,
+    ManageNeuronRequest, ManageNeuronResponse, NeuronId, Operation, ProposalActionRequest,
+    ProposalId, SetVisibility,
 };
 
 /// Claim neuron using manage_neuron
@@ -88,85 +85,13 @@ pub async fn create_sns_proposal(
     neuron_id: u64,
     owner_principal: Principal,
 ) -> Result<u64> {
-    let logo_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAFJElEQVR4nG2WT4slZxXGf8+puvd298z0ZDLp9BCTjAlGBnElCAoDLty6cCTgwm8gfoCAe79CNu7cKAiShW6yUBAkKEgEEYOQsZ1BkkxPt9N/771VdR4Xb1Xd23On4HKr3fe9589zznnOq//+8K4YnuDxw+bkuJMAbHZvVW/cnRjAlXmiyQ9uv31YRQBm6Xj/zqMHN48XDkA1zz7xkz9mVL2+hFoYKDaEimqBKT+QleXVoyfjq2RpJSohW4AE";
-
-    let sns_data = CreateServiceNervousSystem {
-        name: Some("Toolkit".to_string()),
-        description: Some("Toolkit is a versatile suite for managing Service Nervous Systems (SNS) and projects on the Internet Computer. From governance proposals to canister deployment, it empowers users to innovate, collaborate, and decentralize seamlessly.".to_string()),
-        url: Some("https://ic-toolkit.app".to_string()),
-        logo: Some(Image {
-            base64_encoding: Some(logo_base64.to_string()),
-        }),
-        fallback_controller_principal_ids: vec![owner_principal],
-        dapp_canisters: vec![],
-        ledger_parameters: Some(LedgerParameters {
-            transaction_fee: Some(Tokens { e8s: Some(10_000) }),
-            token_symbol: Some("TKT".to_string()),
-            token_logo: Some(Image {
-                base64_encoding: Some(logo_base64.to_string()),
-            }),
-            token_name: Some("Toolkit Token".to_string()),
-        }),
-        governance_parameters: Some(GovernanceParameters {
-            neuron_maximum_dissolve_delay_bonus: Some(Percentage { basis_points: Some(10_000) }),
-            neuron_maximum_age_bonus: Some(Percentage { basis_points: Some(0) }),
-            neuron_minimum_stake: Some(Tokens { e8s: Some(10_000_000) }),
-            neuron_maximum_age_for_age_bonus: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
-            neuron_maximum_dissolve_delay: Some(Duration { seconds: Some(8 * 365 * 24 * 60 * 60) }),
-            neuron_minimum_dissolve_delay_to_vote: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
-            proposal_initial_voting_period: Some(Duration { seconds: Some(4 * 24 * 60 * 60) }),
-            proposal_wait_for_quiet_deadline_increase: Some(Duration { seconds: Some(24 * 60 * 60) }),
-            proposal_rejection_fee: Some(Tokens { e8s: Some(11_000_000) }),
-            voting_reward_parameters: Some(VotingRewardParameters {
-                initial_reward_rate: Some(Percentage { basis_points: Some(0) }),
-                final_reward_rate: Some(Percentage { basis_points: Some(0) }),
-                reward_rate_transition_duration: Some(Duration { seconds: Some(0) }),
-            }),
-        }),
-        swap_parameters: Some(SwapParameters {
-            minimum_participants: Some(5),
-            neurons_fund_participation: Some(false),
-            minimum_direct_participation_icp: Some(Tokens { e8s: Some(100_000_000 * 5) }),
-            maximum_direct_participation_icp: Some(Tokens { e8s: Some(1_000_000_000 * 5) }),
-            minimum_participant_icp: Some(Tokens { e8s: Some(100_000_000) }),
-            maximum_participant_icp: Some(Tokens { e8s: Some(1_000_000_000) }),
-            confirmation_text: None,
-            minimum_icp: None,
-            maximum_icp: None,
-            neurons_fund_investment_icp: None,
-            restricted_countries: Some(Countries {
-                iso_codes: vec!["AQ".to_string()],
-            }),
-            start_time: None,
-            duration: Some(Duration { seconds: Some(7 * 24 * 60 * 60) }),
-            neuron_basket_construction_parameters: Some(NeuronBasketConstructionParameters {
-                count: Some(3),
-                dissolve_delay_interval: Some(Duration { seconds: Some(30 * 24 * 60 * 60) }),
-            }),
-        }),
-        initial_token_distribution: Some(InitialTokenDistribution {
-            treasury_distribution: Some(SwapDistribution {
-                total: Some(Tokens { e8s: Some(1_000_000_000) }),
-            }),
-            developer_distribution: Some(DeveloperDistribution {
-                developer_neurons: vec![NeuronDistribution {
-                    controller: Some(owner_principal),
-                    dissolve_delay: Some(Duration { seconds: Some(2 * 365 * 24 * 60 * 60) }),
-                    memo: Some(0),
-                    vesting_period: Some(Duration { seconds: Some(4 * 365 * 24 * 60 * 60) }),
-                    stake: Some(Tokens { e8s: Some(100_000_000) }),
-                }],
-            }),
-            swap_distribution: Some(SwapDistribution {
-                total: Some(Tokens { e8s: Some(2_000_000_000) }),
-            }),
-        }),
-    };
+    // Build SNS configuration from sns_config.rs
+    let sns_data = crate::init::sns_config::build_sns_config(owner_principal);
 
     let proposal = MakeProposalRequest {
         url: "".to_string(),
-        title: Some("Deploy Toolkit SNS".to_string()),
-        summary: "Deploy Toolkit SNS summary".to_string(),
+        title: Some(crate::init::sns_config::default_proposal_title()),
+        summary: crate::init::sns_config::default_proposal_summary(),
         action: Some(ProposalActionRequest::CreateServiceNervousSystem(sns_data)),
     };
 
@@ -246,10 +171,10 @@ pub async fn add_hotkey_to_icp_neuron_default_path(hotkey_principal: Principal) 
     use super::identity::{create_agent, load_dfx_identity};
 
     // Read deployment data
-    let deployment_path = super::super::data_output::get_output_path();
+    let deployment_path = crate::core::utils::data_output::get_output_path();
     let data_content = std::fs::read_to_string(&deployment_path)
         .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
-    let deployment_data: super::super::data_output::SnsCreationData =
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
     // Get ICP neuron ID
@@ -322,10 +247,10 @@ pub async fn set_icp_neuron_visibility_default_path(is_public: bool) -> Result<(
     use super::identity::{create_agent, load_dfx_identity};
 
     // Read deployment data
-    let deployment_path = super::super::data_output::get_output_path();
+    let deployment_path = crate::core::utils::data_output::get_output_path();
     let data_content = std::fs::read_to_string(&deployment_path)
         .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
-    let deployment_data: super::super::data_output::SnsCreationData =
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
     // Get ICP neuron ID
@@ -393,11 +318,11 @@ pub async fn get_icp_neuron_default_path(
         id
     } else {
         // Read deployment data
-        let deployment_path = super::super::data_output::get_output_path();
+        let deployment_path = crate::core::utils::data_output::get_output_path();
         let data_content = std::fs::read_to_string(&deployment_path).with_context(|| {
             format!("Failed to read deployment data from: {:?}", deployment_path)
         })?;
-        let deployment_data: super::super::data_output::SnsCreationData =
+        let deployment_data: crate::core::utils::data_output::SnsCreationData =
             serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
         deployment_data.icp_neuron_id
     };

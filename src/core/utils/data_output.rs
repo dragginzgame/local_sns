@@ -28,8 +28,8 @@ pub struct DeployedSnsData {
     pub ledger_canister_id: Option<String>,
 }
 
-impl From<&super::declarations::sns_wasm::DeployedSns> for DeployedSnsData {
-    fn from(sns: &super::declarations::sns_wasm::DeployedSns) -> Self {
+impl From<&crate::core::declarations::sns_wasm::DeployedSns> for DeployedSnsData {
+    fn from(sns: &crate::core::declarations::sns_wasm::DeployedSns) -> Self {
         DeployedSnsData {
             root_canister_id: sns.root_canister_id.map(|p| p.to_string()),
             governance_canister_id: sns.governance_canister_id.map(|p| p.to_string()),

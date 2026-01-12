@@ -72,10 +72,10 @@ pub async fn list_neurons_for_principal_default_path(principal: Principal) -> Re
     use super::identity::create_agent;
 
     // Read deployment data
-    let deployment_path = super::super::data_output::get_output_path();
+    let deployment_path = crate::core::utils::data_output::get_output_path();
     let data_content = std::fs::read_to_string(&deployment_path)
         .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
-    let deployment_data: super::super::data_output::SnsCreationData =
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
     // Get governance canister ID
@@ -160,7 +160,7 @@ pub async fn add_hotkey_to_participant_neuron(
             deployment_data_path
         )
     })?;
-    let deployment_data: super::super::data_output::SnsCreationData =
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
     // Find participant seed file
@@ -225,7 +225,7 @@ pub async fn add_hotkey_to_participant_neuron_default_path(
     hotkey_principal: Principal,
     permission_types: Option<Vec<i32>>,
 ) -> Result<()> {
-    let deployment_path = super::super::data_output::get_output_path();
+    let deployment_path = crate::core::utils::data_output::get_output_path();
     add_hotkey_to_participant_neuron(
         &deployment_path,
         participant_principal,

@@ -7,19 +7,19 @@ use ic_agent::Agent;
 use sha2::Digest;
 use std::time::Duration as StdDuration;
 
-use super::declarations::icp_ledger::Account as LedgerAccount;
-use super::declarations::sns_swap::GetLifecycleResponse;
-use super::ops::governance_ops::{claim_neuron, create_sns_proposal, set_dissolve_delay};
-use super::ops::identity::{create_agent, load_dfx_identity, load_minting_identity};
-use super::ops::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
-use super::ops::snsw_ops::get_deployed_sns;
-use super::ops::swap_ops::{
+use crate::core::declarations::icp_ledger::Account as LedgerAccount;
+use crate::core::declarations::sns_swap::GetLifecycleResponse;
+use crate::core::ops::governance_ops::{claim_neuron, create_sns_proposal, set_dissolve_delay};
+use crate::core::ops::identity::{create_agent, load_dfx_identity, load_minting_identity};
+use crate::core::ops::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
+use crate::core::ops::snsw_ops::get_deployed_sns;
+use crate::core::ops::swap_ops::{
     create_sale_ticket, finalize_swap, generate_participant_subaccount, get_derived_state,
     get_swap_lifecycle, refresh_buyer_tokens,
 };
-use super::utils::{print_header, print_info, print_step, print_success, print_warning};
+use crate::core::utils::{print_header, print_info, print_step, print_success, print_warning};
 
-use crate::lib::{constants::*, data_output};
+use crate::core::utils::constants::*;
 
 pub struct DeploymentContext {
     pub agent: Agent,
@@ -148,7 +148,7 @@ pub async fn configure_neuron(ctx: &DeploymentContext, neuron_id: u64) -> Result
 pub async fn create_and_wait_for_proposal(
     ctx: &DeploymentContext,
     neuron_id: u64,
-) -> Result<(u64, super::declarations::sns_wasm::DeployedSns)> {
+) -> Result<(u64, crate::core::declarations::sns_wasm::DeployedSns)> {
     // Create SNS Proposal
     print_header("Creating SNS Proposal");
     print_step("Creating SNS proposal...");
@@ -235,7 +235,7 @@ pub async fn wait_for_swap_to_open(ctx: &DeploymentContext, swap_sns: Principal)
         .agent
         .query(&swap_sns, "get_lifecycle")
         .with_arg(encode_args((
-            crate::declarations::sns_swap::GetLifecycleArg {},
+            crate::core::declarations::sns_swap::GetLifecycleArg {},
         ))?)
         .call()
         .await
@@ -329,10 +329,10 @@ pub async fn create_and_participate_participant(
     seed.copy_from_slice(&seed_bytes[..32]);
 
     // Save participant seed to file for later use
-    let seed_path = data_output::get_output_dir()
+    let seed_path = crate::core::utils::data_output::get_output_dir()
         .join("participants")
         .join(format!("participant_{}.seed", participant_num));
-    crate::ops::identity::save_seed_to_file(&seed, &seed_path)
+        crate::core::ops::identity::save_seed_to_file(&seed, &seed_path)
         .with_context(|| format!("Failed to save participant {participant_num} seed"))?;
     print_info(&format!(
         "  Saved participant identity: {}",
@@ -646,28 +646,28 @@ pub async fn write_deployment_data(
     neuron_id: u64,
     proposal_id: u64,
     owner_principal: Principal,
-    deployed_sns: &super::declarations::sns_wasm::DeployedSns,
+    deployed_sns: &crate::core::declarations::sns_wasm::DeployedSns,
     participant_principals: &[Principal],
 ) -> Result<()> {
     print_header("Writing Deployment Data");
-    let deployment_data = data_output::SnsCreationData {
+    let deployment_data = crate::core::utils::data_output::SnsCreationData {
         icp_neuron_id: neuron_id,
         proposal_id,
         owner_principal: owner_principal.to_string(),
-        deployed_sns: data_output::DeployedSnsData::from(deployed_sns),
+        deployed_sns: crate::core::utils::data_output::DeployedSnsData::from(deployed_sns),
         participants: participant_principals
             .iter()
             .enumerate()
-            .map(|(i, p)| data_output::ParticipantData {
+            .map(|(i, p)| crate::core::utils::data_output::ParticipantData {
                 principal: p.to_string(),
                 seed_file: format!("generated/participants/participant_{}.seed", i + 1),
             })
             .collect(),
     };
 
-    data_output::write_data(&deployment_data).context("Failed to write deployment data file")?;
+    crate::core::utils::data_output::write_data(&deployment_data).context("Failed to write deployment data file")?;
 
-    let output_path = data_output::get_output_path();
+    let output_path = crate::core::utils::data_output::get_output_path();
     print_success(&format!(
         "Deployment data written to: {}",
         output_path.display()
@@ -693,7 +693,7 @@ pub async fn deploy_sns() -> Result<()> {
 
     // Update SNS Subnet List (skipped for local)
     print_header("Updating SNS Subnet List");
-    super::utils::print_warning(
+        crate::core::utils::print_warning(
         "Subnet update skipped - may need manual configuration for local setup",
     );
 
@@ -738,7 +738,7 @@ pub async fn deploy_sns() -> Result<()> {
     print_info(&format!("ICP Neuron ID: {neuron_id}"));
     print_info(&format!("Proposal ID: {proposal_id}"));
 
-    let output_path = data_output::get_output_path();
+    let output_path = crate::core::utils::data_output::get_output_path();
     println!("\n💡 You can now interact with the SNS using these canister IDs");
     println!(
         "💡 Deployment data has been saved to: {}",

@@ -4,14 +4,14 @@ use anyhow::{Context, Result};
 use candid::Principal;
 use hex;
 
-use super::ops::governance_ops::{
+use crate::core::ops::governance_ops::{
     add_hotkey_to_icp_neuron_default_path, get_icp_neuron_default_path,
     set_icp_neuron_visibility_default_path,
 };
-use super::ops::sns_governance_ops::{
+use crate::core::ops::sns_governance_ops::{
     add_hotkey_to_participant_neuron_default_path, list_neurons_for_principal_default_path,
 };
-use super::utils::{print_header, print_info, print_success, print_warning};
+use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
 /// Handle add-hotkey command
 pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
