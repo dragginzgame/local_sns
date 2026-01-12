@@ -10,6 +10,7 @@ use crate::core::ops::governance_ops::{
 };
 use crate::core::ops::sns_governance_ops::{
     add_hotkey_to_participant_neuron_default_path, list_neurons_for_principal_default_path,
+    mint_tokens_and_vote,
 };
 use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
@@ -284,4 +285,66 @@ fn print_add_hotkey_usage(program_name: &str) {
         program_name
     );
     eprintln!("  {} add-hotkey icp <hotkey_principal>", program_name);
+}
+
+/// Handle mint-and-vote command
+pub async fn handle_mint_and_vote(args: &[String]) -> Result<()> {
+    if args.len() < 4 {
+        eprintln!(
+            "Usage: {} mint-and-vote <to_principal> <amount_e8s>",
+            args[0]
+        );
+        eprintln!("\nArguments:");
+        eprintln!("  to_principal - Principal to mint tokens to");
+        eprintln!("  amount_e8s   - Amount of tokens to mint in e8s (1 token = 100_000_000 e8s)");
+        eprintln!("\nExample:");
+        eprintln!("  {} mint-and-vote 2laou-ygqmf-... 1000000000000", args[0]);
+        eprintln!("  (This mints 10,000 tokens to the specified principal)");
+        std::process::exit(1);
+    }
+
+    // args[0] = program name, args[1] = "mint-and-vote", args[2] = to_principal, args[3] = amount_e8s
+    let to_principal = Principal::from_text(&args[2]).context("Failed to parse to_principal")?;
+    let amount_e8s = args[3]
+        .parse::<u64>()
+        .context("Failed to parse amount_e8s")?;
+
+    print_header("Mint SNS Tokens and Vote");
+    print_info(&format!("To principal: {}", to_principal));
+    print_info(&format!(
+        "Amount: {} e8s ({} tokens)",
+        amount_e8s,
+        amount_e8s / 100_000_000
+    ));
+
+    // Read deployment data to get first participant as proposer
+    let deployment_path = crate::core::utils::data_output::get_output_path();
+    let data_content = std::fs::read_to_string(&deployment_path)
+        .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    if deployment_data.participants.is_empty() {
+        anyhow::bail!("No participants found in deployment data");
+    }
+
+    // Use first participant as proposer
+    let proposer_principal = Principal::from_text(&deployment_data.participants[0].principal)
+        .context("Failed to parse proposer principal")?;
+    print_info(&format!("Proposer: {}", proposer_principal));
+    print_info("All participants will vote yes on the proposal");
+    println!();
+
+    // Create proposal and vote
+    let proposal_id = mint_tokens_and_vote(proposer_principal, to_principal, amount_e8s)
+        .await
+        .context("Failed to mint tokens and vote")?;
+
+    print_success("Mint proposal created and all participants voted!");
+    print_info(&format!(
+        "Proposal ID (hex): {}",
+        hex::encode(&proposal_id.id)
+    ));
+
+    Ok(())
 }

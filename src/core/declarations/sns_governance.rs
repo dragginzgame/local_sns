@@ -31,7 +31,49 @@ pub struct RemoveNeuronPermissions {
 pub enum Command {
     AddNeuronPermissions(AddNeuronPermissions),
     RemoveNeuronPermissions(RemoveNeuronPermissions),
+    MakeProposal(Proposal),
+    RegisterVote(RegisterVote),
 }
+
+#[derive(CandidType, Deserialize)]
+pub struct Proposal {
+    pub title: Option<String>,
+    pub summary: String,
+    pub url: String,
+    pub action: Option<ProposalAction>,
+}
+
+#[derive(CandidType, Deserialize)]
+pub enum ProposalAction {
+    Motion(Motion),
+    MintSnsTokens(MintSnsTokens),
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct Motion {
+    pub motion_text: String,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct MintSnsTokens {
+    pub to: Option<Principal>,
+    pub amount_e8s: Option<u64>,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct RegisterVote {
+    pub vote: i32, // 1 = Yes, 2 = No
+    pub proposal: Option<ProposalId>,
+}
+
+#[derive(CandidType, Deserialize, Clone)]
+pub struct ProposalId {
+    pub id: Vec<u8>,
+}
+
+// Vote constants
+pub const VOTE_YES: i32 = 1;
+pub const VOTE_NO: i32 = 2;
 
 #[derive(CandidType, Deserialize)]
 pub struct ManageNeuron {
@@ -49,6 +91,13 @@ pub struct GovernanceError {
 pub enum Command1 {
     Error(GovernanceError),
     AddNeuronPermission {},
+    MakeProposal(ProposalResponse),
+    RegisterVote {},
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct ProposalResponse {
+    pub proposal_id: Option<ProposalId>,
 }
 
 #[derive(CandidType, Deserialize)]
