@@ -1,5 +1,7 @@
 # Local SNS Deployment Tool
 
+> requires --system-canisters supported DFX version (dfx 0.30.1 or higher)
+
 Standalone Rust tool for deploying and managing Service Nervous System (SNS) instances on local `dfx` networks.
 
 This directory is self-contained and can be copied to a separate repository. All dependencies are specified in `Cargo.toml`, and all generated files are stored in the `generated/` directory.
@@ -99,6 +101,7 @@ cargo run --bin local_sns -- get-icp-neuron [neuron_id]
 All generated files are stored in the `generated/` directory (relative to the `local_sns/` root):
 
 - **`generated/sns_deployment_data.json`**: Deployment metadata including:
+
   - ICP neuron ID used for proposal
   - Proposal ID
   - Owner principal
@@ -128,39 +131,48 @@ For detailed information about each step, see the inline documentation in the so
 ## CLI Commands
 
 ### `add-hotkey`
+
 Add a hotkey to an SNS or ICP neuron.
 
 **Usage:**
+
 ```bash
 cargo run --bin local_sns -- add-hotkey <sns|icp> <owner_principal> <hotkey_principal> [permissions]
 ```
 
 **Arguments:**
+
 - `sns|icp`: Neuron type
 - `owner_principal`: For SNS, the participant principal. For ICP, ignored (uses default dfx identity)
 - `hotkey_principal`: Principal to add as hotkey
 - `permissions` (SNS only): Comma-separated permission types (default: `3,4`)
 
 ### `list-neurons`
+
 List all SNS neurons owned by a principal.
 
 **Usage:**
+
 ```bash
 cargo run --bin local_sns -- list-neurons <principal>
 ```
 
 ### `set-icp-visibility`
+
 Set the visibility of the ICP neuron (public/private).
 
 **Usage:**
+
 ```bash
 cargo run --bin local_sns -- set-icp-visibility <true|false>
 ```
 
 ### `get-icp-neuron`
+
 Get full information about an ICP neuron.
 
 **Usage:**
+
 ```bash
 cargo run --bin local_sns -- get-icp-neuron [neuron_id]
 ```
