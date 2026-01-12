@@ -4,8 +4,7 @@ mod init;
 use anyhow::Result;
 
 use core::ops::commands::{
-    handle_add_hotkey, handle_get_icp_neuron, handle_list_neurons, handle_mint_and_vote,
-    handle_set_icp_visibility,
+    handle_add_hotkey, handle_get_icp_neuron, handle_list_neurons, handle_set_icp_visibility,
 };
 use core::ops::deployment::deploy_sns;
 
@@ -22,7 +21,6 @@ async fn main() -> Result<()> {
             "list-neurons" => return handle_list_neurons(&args).await,
             "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
             "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
-            "mint-and-vote" => return handle_mint_and_vote(&args).await,
             _ => {
                 eprintln!("Unknown command: {}", args[1]);
                 eprintln!("\nAvailable commands:");
@@ -31,7 +29,6 @@ async fn main() -> Result<()> {
                 eprintln!("  list-neurons        - List SNS neurons for a principal");
                 eprintln!("  set-icp-visibility  - Set ICP neuron visibility");
                 eprintln!("  get-icp-neuron      - Get ICP neuron information");
-                eprintln!("  mint-and-vote       - Mint SNS tokens and have all participants vote yes");
                 std::process::exit(1);
             }
         }
