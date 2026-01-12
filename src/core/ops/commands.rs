@@ -9,7 +9,8 @@ use crate::core::ops::governance_ops::{
     set_icp_neuron_visibility_default_path,
 };
 use crate::core::ops::sns_governance_ops::{
-    add_hotkey_to_participant_neuron_default_path, list_neurons_for_principal_default_path,
+    add_hotkey_to_participant_neuron_default_path, disburse_participant_neuron_default_path,
+    list_neurons_for_principal_default_path,
 };
 use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
@@ -247,6 +248,47 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
         serde_json::to_string_pretty(&neuron).context("Failed to serialize neuron to JSON")?;
     println!("{}", json);
 
+    Ok(())
+}
+
+/// Handle disburse-neuron command
+pub async fn handle_disburse_neuron(args: &[String]) -> Result<()> {
+    if args.len() < 4 {
+        eprintln!(
+            "Usage: {} disburse-neuron <participant_principal> <receiver_principal>",
+            args[0]
+        );
+        eprintln!("\nArguments:");
+        eprintln!("  participant_principal - Principal of the participant who owns the neuron");
+        eprintln!("  receiver_principal    - Principal to receive the disbursed tokens");
+        eprintln!("\nNote: Disburses the full amount of the neuron to the receiver");
+        eprintln!("\nExample:");
+        eprintln!(
+            "  {} disburse-neuron 2laou-ygqmf-... receiver-principal-...",
+            args[0]
+        );
+        std::process::exit(1);
+    }
+
+    let participant_principal =
+        Principal::from_text(&args[2]).context("Failed to parse participant principal")?;
+    let receiver_principal =
+        Principal::from_text(&args[3]).context("Failed to parse receiver principal")?;
+
+    print_header("Disbursing SNS Neuron");
+    print_info(&format!("Participant: {}", participant_principal));
+    print_info(&format!("Receiver: {}", receiver_principal));
+    print_info("Amount: Full neuron stake");
+
+    let block_height =
+        disburse_participant_neuron_default_path(participant_principal, receiver_principal)
+            .await
+            .context("Failed to disburse neuron")?;
+
+    print_success(&format!(
+        "Neuron disbursed successfully! Transfer block height: {}",
+        block_height
+    ));
     Ok(())
 }
 

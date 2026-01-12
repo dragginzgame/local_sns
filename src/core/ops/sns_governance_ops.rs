@@ -6,8 +6,8 @@ use ic_agent::Agent;
 use std::path::PathBuf;
 
 use super::super::declarations::sns_governance::{
-    AddNeuronPermissions, Command, ListNeurons, ListNeuronsResponse, ManageNeuron,
-    ManageNeuronResponse, Neuron, NeuronId, NeuronPermissionList,
+    Account, AddNeuronPermissions, Command, Disburse, ListNeurons, ListNeuronsResponse,
+    ManageNeuron, ManageNeuronResponse, Neuron, NeuronId, NeuronPermissionList,
 };
 
 /// Get the neuron ID for a participant principal
@@ -137,6 +137,9 @@ pub async fn add_hotkey_to_neuron(
             super::super::declarations::sns_governance::Command1::AddNeuronPermission {} => {
                 // Success
             }
+            _ => {
+                // Other command responses are success cases we don't need to handle specifically
+            }
         }
     }
 
@@ -233,4 +236,134 @@ pub async fn add_hotkey_to_participant_neuron_default_path(
         permission_types,
     )
     .await
+}
+
+/// Disburse a neuron to a specific principal
+/// This disburses the full amount of the neuron
+pub async fn disburse_neuron(
+    agent: &Agent,
+    governance_canister: Principal,
+    neuron_subaccount: Vec<u8>,
+    receiver_principal: Principal,
+) -> Result<u64> {
+    let command = Command::Disburse(Disburse {
+        to_account: Some(Account {
+            owner: Some(receiver_principal),
+            subaccount: None,
+        }),
+        amount: None, // None means disburse full amount
+    });
+
+    let request = ManageNeuron {
+        subaccount: neuron_subaccount.clone(),
+        command: Some(command),
+    };
+    let args = candid::encode_args((request,))?;
+
+    let response = agent
+        .update(&governance_canister, "manage_neuron")
+        .with_arg(args)
+        .call_and_wait()
+        .await
+        .context("Failed to call manage_neuron")?;
+
+    let result: ManageNeuronResponse = Decode!(&response, ManageNeuronResponse)?;
+
+    // Check for errors
+    if let Some(cmd) = result.command {
+        match cmd {
+            super::super::declarations::sns_governance::Command1::Error(e) => {
+                anyhow::bail!(
+                    "Governance error: {} (type: {})",
+                    e.error_message,
+                    e.error_type
+                );
+            }
+            super::super::declarations::sns_governance::Command1::Disburse(response) => {
+                Ok(response.transfer_block_height)
+            }
+            _ => {
+                anyhow::bail!("Unexpected response type from manage_neuron")
+            }
+        }
+    } else {
+        anyhow::bail!("No response from manage_neuron")
+    }
+}
+
+/// High-level function to disburse a participant's neuron to a receiver
+/// This reads deployment data, loads the participant identity, and disburses the neuron
+pub async fn disburse_participant_neuron(
+    deployment_data_path: &std::path::Path,
+    participant_principal: Principal,
+    receiver_principal: Principal,
+) -> Result<u64> {
+    use super::identity::{create_agent, load_identity_from_seed_file};
+
+    // Read deployment data
+    let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
+        format!(
+            "Failed to read deployment data from: {:?}",
+            deployment_data_path
+        )
+    })?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    // Find participant seed file
+    let participant_data = deployment_data
+        .participants
+        .iter()
+        .find(|p| p.principal == participant_principal.to_string())
+        .with_context(|| {
+            format!(
+                "Participant principal {} not found in deployment data",
+                participant_principal
+            )
+        })?;
+
+    // Load participant identity from seed file
+    let seed_path = PathBuf::from(&participant_data.seed_file);
+    let identity = load_identity_from_seed_file(&seed_path)
+        .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+
+    // Create authenticated agent
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent with participant identity")?;
+
+    // Get governance canister ID
+    let governance_canister = deployment_data
+        .deployed_sns
+        .governance_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse governance canister ID from deployment data")?;
+
+    // Get participant neuron
+    let neuron_id = get_participant_neuron_id(&agent, governance_canister, participant_principal)
+        .await
+        .context("Failed to get participant neuron ID")?
+        .context("Participant has no neurons. Make sure the SNS swap has been finalized.")?;
+
+    // Disburse neuron
+    let block_height = disburse_neuron(
+        &agent,
+        governance_canister,
+        neuron_id.id,
+        receiver_principal,
+    )
+    .await
+    .context("Failed to disburse neuron")?;
+
+    Ok(block_height)
+}
+
+/// Convenience function that reads deployment data from the default location
+pub async fn disburse_participant_neuron_default_path(
+    participant_principal: Principal,
+    receiver_principal: Principal,
+) -> Result<u64> {
+    let deployment_path = crate::core::utils::data_output::get_output_path();
+    disburse_participant_neuron(&deployment_path, participant_principal, receiver_principal).await
 }

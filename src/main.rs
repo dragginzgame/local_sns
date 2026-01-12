@@ -4,7 +4,8 @@ mod init;
 use anyhow::Result;
 
 use core::ops::commands::{
-    handle_add_hotkey, handle_get_icp_neuron, handle_list_neurons, handle_set_icp_visibility,
+    handle_add_hotkey, handle_disburse_neuron, handle_get_icp_neuron, handle_list_neurons,
+    handle_set_icp_visibility,
 };
 use core::ops::deployment::deploy_sns;
 
@@ -19,6 +20,7 @@ async fn main() -> Result<()> {
             "deploy-sns" => return deploy_sns().await,
             "add-hotkey" => return handle_add_hotkey(&args).await,
             "list-neurons" => return handle_list_neurons(&args).await,
+            "disburse-neuron" => return handle_disburse_neuron(&args).await,
             "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
             "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
             _ => {
@@ -27,6 +29,7 @@ async fn main() -> Result<()> {
                 eprintln!("  deploy-sns          - Deploy a new SNS on local dfx network");
                 eprintln!("  add-hotkey          - Add a hotkey to an SNS or ICP neuron");
                 eprintln!("  list-neurons        - List SNS neurons for a principal");
+                eprintln!("  disburse-neuron     - Disburse an SNS neuron to a receiver principal");
                 eprintln!("  set-icp-visibility  - Set ICP neuron visibility");
                 eprintln!("  get-icp-neuron      - Get ICP neuron information");
                 std::process::exit(1);
