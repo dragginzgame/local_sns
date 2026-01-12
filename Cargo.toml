@@ -1,0 +1,50 @@
+[package]
+name = "local_sns"
+edition = "2024"
+rust-version = "1.90.1"
+version = "0.2.21"
+
+[[bin]]
+name = "local_sns"
+path = "src/main.rs"
+
+[dependencies]
+candid = "0.10"
+ic-agent = { version = "0.45", features = ["pem"] }
+ic-ledger-types = "0.4"
+sha2 = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+hex = "0.4"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "allow", priority = -1 }
+nursery = { level = "allow", priority = -1 }
+missing_const_for_fn = "warn"
+must_use_candidate = "warn"
+useless_conversion = "warn"
+redundant_clone = "warn"
+redundant_closure_for_method_calls = "warn"
+use_self = "warn"
+doc_markdown = "allow"
+empty_line_after_doc_comments = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_inception = "allow"
+module_name_repetitions = "allow"
+needless_pass_by_value = "allow"
+wildcard_imports = "allow"
+used_underscore_binding = "allow"
+
+[profile.dev]
+debug = false
+opt-level = 'z'
+
+[profile.release]
+debug = false
+opt-level = 'z'
+overflow-checks = true
+
