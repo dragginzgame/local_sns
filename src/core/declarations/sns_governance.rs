@@ -1,6 +1,12 @@
 // This is an experimental feature to generate Rust binding from Candid.
 // You may want to manually adjust some of the types.
-#![allow(dead_code, unused_imports, large_enum_variant)]
+#![allow(
+    dead_code,
+    unused_imports,
+    renamed_and_removed_lints,
+    large_enum_variant,
+    clippy::vec_box
+)]
 use candid::{self, CandidType, Deserialize, Principal};
 
 #[derive(CandidType, Deserialize)]
@@ -364,12 +370,12 @@ pub struct ManageDappCanisterSettings {
 #[derive(CandidType, Deserialize)]
 pub enum PreciseValue {
     Int(i64),
-    Map(Vec<(String, Box<PreciseValue>)>),
+    Map(Vec<(String, Box<Self>)>),
     Nat(u64),
     Blob(Vec<u8>),
     Bool(bool),
     Text(String),
-    Array(Vec<Box<PreciseValue>>),
+    Array(Vec<Box<Self>>),
 }
 
 #[derive(CandidType, Deserialize)]

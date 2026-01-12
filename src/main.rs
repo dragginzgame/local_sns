@@ -5,7 +5,7 @@ use anyhow::Result;
 
 use core::ops::commands::{
     handle_add_hotkey, handle_disburse_neuron, handle_get_icp_neuron, handle_list_neurons,
-    handle_set_icp_visibility,
+    handle_mint_sns_tokens, handle_set_icp_visibility,
 };
 use core::ops::deployment::deploy_sns;
 
@@ -19,8 +19,9 @@ async fn main() -> Result<()> {
         match args[1].as_str() {
             "deploy-sns" => return deploy_sns().await,
             "add-hotkey" => return handle_add_hotkey(&args).await,
-            "list-neurons" => return handle_list_neurons(&args).await,
-            "disburse-neuron" => return handle_disburse_neuron(&args).await,
+            "list-sns-neurons" => return handle_list_neurons(&args).await,
+            "mint-sns-tokens" => return handle_mint_sns_tokens(&args).await,
+            "disburse-sns-neuron" => return handle_disburse_neuron(&args).await,
             "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
             "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
             _ => {
@@ -28,8 +29,9 @@ async fn main() -> Result<()> {
                 eprintln!("\nAvailable commands:");
                 eprintln!("  deploy-sns          - Deploy a new SNS on local dfx network");
                 eprintln!("  add-hotkey          - Add a hotkey to an SNS or ICP neuron");
-                eprintln!("  list-neurons        - List SNS neurons for a principal");
-                eprintln!("  disburse-neuron     - Disburse an SNS neuron to a receiver principal");
+                eprintln!("  list-sns-neurons    - List SNS neurons for a principal");
+                eprintln!("  mint-sns-tokens     - Create proposal to mint SNS tokens and vote");
+                eprintln!("  disburse-sns-neuron - Disburse an SNS neuron to a receiver principal");
                 eprintln!("  set-icp-visibility  - Set ICP neuron visibility");
                 eprintln!("  get-icp-neuron      - Get ICP neuron information");
                 std::process::exit(1);

@@ -1,15 +1,26 @@
 #!/bin/bash
-# Script to disburse an SNS neuron to a receiver principal
+# Script to disburse the disburseable SNS neuron to a receiver principal
 #
 # Usage:
-#   bash scripts/disburse-neuron.sh <participant_principal> <receiver_principal>
+#   bash scripts/disburse_neuron.sh [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
 #
-# Arguments:
-#   participant_principal - Principal of the participant who owns the neuron
-#   receiver_principal    - Principal to receive the disbursed tokens
+# Arguments (all optional - interactive prompts if not provided):
+#   participant_principal - Optional: Principal of the participant who owns the neuron
+#                          If not provided, shows participant selection menu
+#   neuron_id_hex        - Optional: Neuron ID in hex format
+#                          If not provided, shows neuron selection menu
+#   receiver_principal   - Optional: Principal to receive the disbursed tokens
+#                          If not provided, prompts interactively
+#
+# Interactive flow:
+#   1. Select participant (if not provided)
+#   2. Select neuron (if not provided)
+#   3. Enter receiver principal (if not provided)
 #
 # Example:
-#   bash scripts/disburse-neuron.sh 2laou-ygqmf-... receiver-principal-...
+#   bash scripts/disburse_neuron.sh
+#   bash scripts/disburse_neuron.sh 2laou-ygqmf-... receiver-principal-...
+#   bash scripts/disburse_neuron.sh 2laou-ygqmf-... 0xabcd1234... receiver-principal-...
 
 # to check the balance of a principal, use the following command:
 # dfx canister call LEDGER_CANISTER_ID icrc1_balance_of '(record {owner=principal "USER_PRINCIPAL"; subaccount=null})'
@@ -56,20 +67,7 @@ cd "$LOCAL_SNS_ROOT"
 
 print_header "Disburse SNS Neuron"
 
-# Check arguments
-if [ $# -lt 2 ]; then
-    print_error "Usage: $0 <participant_principal> <receiver_principal>"
-    echo ""
-    echo "Arguments:"
-    echo "  participant_principal - Principal of the participant who owns the neuron"
-    echo "  receiver_principal    - Principal to receive the disbursed tokens"
-    echo ""
-    echo "Note: This disburses the full amount of the neuron to the receiver"
-    exit 1
-fi
-
-PARTICIPANT_PRINCIPAL="$1"
-RECEIVER_PRINCIPAL="$2"
+# All arguments are optional - Rust code handles interactive flow
 
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
@@ -85,11 +83,9 @@ if [ ! -f "$DEPLOYMENT_DATA" ]; then
     exit 1
 fi
 
-# Verify participant principal is in deployment data
-if ! grep -q "$PARTICIPANT_PRINCIPAL" "$DEPLOYMENT_DATA"; then
-    print_warning "Participant principal not found in deployment data"
-    print_info "Available participants:"
-    grep -A 2 '"participants"' "$DEPLOYMENT_DATA" | grep '"principal"' | head -5 | sed 's/^/  /'
+# Verify deployment data is valid JSON (basic check)
+if ! python3 -m json.tool "$DEPLOYMENT_DATA" >/dev/null 2>&1; then
+    print_warning "Deployment data file may be invalid JSON"
 fi
 
 # Check if Rust toolchain is available
@@ -107,14 +103,18 @@ else
     cargo build --bin local_sns
 fi
 
-# Disburse neuron
+# Disburse neuron - Rust code will handle interactive flow
 print_header "Disbursing Neuron"
-print_info "Participant: $PARTICIPANT_PRINCIPAL"
-print_info "Receiver: $RECEIVER_PRINCIPAL"
-print_info "Amount: Full neuron stake"
 echo ""
 
-cargo run --bin local_sns -- disburse-neuron "$PARTICIPANT_PRINCIPAL" "$RECEIVER_PRINCIPAL"
+# Build command arguments - pass through whatever was provided
+CMD_ARGS=("disburse-sns-neuron")
+# Pass all provided arguments through - Rust code will handle interactive prompts for missing ones
+for arg in "$@"; do
+    CMD_ARGS+=("$arg")
+done
+
+cargo run --bin local_sns -- "${CMD_ARGS[@]}"
 
 print_success "Neuron disbursed successfully!"
 

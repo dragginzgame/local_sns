@@ -1,14 +1,16 @@
 #!/bin/bash
 # Script to fetch SNS neurons for a given principal
-# This is a wrapper around the Rust binary's list-neurons command
+# This is a wrapper around the Rust binary's list-sns-neurons command
 #
 # Usage:
-#   bash scripts/get_sns_neurons.sh <principal>
+#   bash scripts/get_sns_neurons.sh [principal]
 #
 # Arguments:
-#   principal - Principal to query neurons for
+#   principal - Optional: Principal to query neurons for
+#              If not provided, shows participant selection menu
 #
 # Example:
+#   bash scripts/get_sns_neurons.sh
 #   bash scripts/get_sns_neurons.sh qc2qr-5u5mz-3ny2c-rzvkj-3z2lh-4uawd-5ggw7-pfwno-ghsmf-gqfau-oqe
 
 set -euo pipefail
@@ -44,20 +46,12 @@ print_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
-# Check arguments
-if [ $# -lt 1 ]; then
-    echo ""
-    echo "Usage: $0 <principal>"
-    echo ""
-    echo "Arguments:"
-    echo "  principal - Principal to query neurons for"
-    echo ""
-    echo "Example:"
-    echo "  $0 qc2qr-5u5mz-3ny2c-rzvkj-3z2lh-4uawd-5ggw7-pfwno-ghsmf-gqfau-oqe"
-    exit 1
+# Check arguments - principal is now optional
+if [ $# -ge 1 ]; then
+    PRINCIPAL="$1"
+else
+    PRINCIPAL=""
 fi
-
-PRINCIPAL="$1"
 
 # Get script directory (should be in local_sns/scripts/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -66,9 +60,13 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Fetching SNS Neurons for Principal"
+print_header "Fetching SNS Neurons"
 
-print_info "Principal: $PRINCIPAL"
+if [ -n "$PRINCIPAL" ]; then
+    print_info "Principal: $PRINCIPAL"
+else
+    print_info "No principal specified - will show participant selection"
+fi
 
 DEPLOYMENT_DATA="generated/sns_deployment_data.json"
 
@@ -100,7 +98,11 @@ else
     cargo build --bin local_sns
 fi
 
-# Use the Rust binary's list-neurons command
+# Use the Rust binary's list-sns-neurons command
 print_header "Querying SNS Governance via Rust Binary"
 
-cargo run --bin local_sns -- list-neurons "$PRINCIPAL"
+if [ -n "$PRINCIPAL" ]; then
+    cargo run --bin local_sns -- list-sns-neurons "$PRINCIPAL"
+else
+    cargo run --bin local_sns -- list-sns-neurons
+fi

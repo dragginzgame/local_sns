@@ -1,29 +1,25 @@
 #!/bin/bash
-# Script to add a hotkey to an SNS neuron
+# Script to mint SNS tokens by creating a proposal and getting all neurons to vote
 #
 # Usage:
-#   bash scripts/add_sns_hotkey.sh [participant_principal] [neuron_id_hex|hotkey_principal] [hotkey_principal|permissions] [permissions]
+#   bash scripts/mint_sns_tokens.sh [proposer_principal] [receiver_principal] [amount_e8s]
 #
 # Arguments (all optional - interactive prompts if not provided):
-#   participant_principal - Optional: Principal of the participant who owns the neuron
-#                          If not provided, shows participant selection menu
-#   neuron_id_hex        - Optional: Neuron ID in hex format
-#                          If not provided, shows neuron selection menu
-#   hotkey_principal     - Optional: Principal to add as a hotkey
-#                          If not provided, prompts interactively
-#   permissions          - Optional: comma-separated permission types (default: 3,4)
-#                          Permission types: 2=ManagePrincipals, 3=SubmitProposal, 4=Vote
+#   proposer_principal - Optional: Principal of the participant who will create the proposal
+#                        If not provided, shows participant selection menu
+#   receiver_principal - Optional: Principal to receive the minted tokens
+#                        If not provided, prompts interactively
+#   amount_e8s        - Optional: Amount of tokens to mint (in e8s, e.g., 100000000 = 1 token)
+#                        If not provided, prompts interactively
 #
 # Interactive flow:
-#   1. Select participant (if not provided)
-#   2. Select neuron (if not provided)
-#   3. Enter hotkey principal (if not provided)
+#   1. Select proposer participant (if not provided)
+#   2. Enter receiver principal (if not provided)
+#   3. Enter amount to mint (if not provided)
 #
 # Example:
-#   bash scripts/add_sns_hotkey.sh
-#   bash scripts/add_sns_hotkey.sh 2laou-ygqmf-... your-hotkey-principal
-#   bash scripts/add_sns_hotkey.sh 2laou-ygqmf-... your-hotkey-principal 2,3,4
-#   bash scripts/add_sns_hotkey.sh 2laou-ygqmf-... 0xabcd1234... your-hotkey-principal 2,3,4
+#   bash scripts/mint_sns_tokens.sh
+#   bash scripts/mint_sns_tokens.sh 2laou-ygqmf-... receiver-principal-... 100000000000
 
 set -euo pipefail
 
@@ -65,7 +61,9 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Add SNS Neuron Hotkey"
+print_header "Mint SNS Tokens"
+
+# All arguments are optional - Rust code handles interactive flow
 
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
@@ -101,12 +99,12 @@ else
     cargo build --bin local_sns
 fi
 
-# Add hotkey - Rust code will handle interactive flow
-print_header "Adding Hotkey"
+# Mint tokens - Rust code will handle interactive flow
+print_header "Creating Proposal and Voting"
 echo ""
 
 # Build command arguments - pass through whatever was provided
-CMD_ARGS=("add-hotkey" "sns")
+CMD_ARGS=("mint-sns-tokens")
 # Pass all provided arguments through - Rust code will handle interactive prompts for missing ones
 for arg in "$@"; do
     CMD_ARGS+=("$arg")
@@ -114,4 +112,5 @@ done
 
 cargo run --bin local_sns -- "${CMD_ARGS[@]}"
 
-print_success "Hotkey added successfully!"
+print_success "Tokens minting proposal created and voted on successfully!"
+
