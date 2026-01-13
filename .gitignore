@@ -1,6 +1,6 @@
 # Generated files
 generated/
-
+.dfx/
 # Rust build artifacts
 target/
 Cargo.lock
