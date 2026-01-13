@@ -241,6 +241,120 @@ pub async fn set_neuron_visibility(
     }
 }
 
+/// Get minting account balance
+pub async fn get_minting_account_balance() -> Result<u64> {
+    use super::identity::{create_agent, load_minting_identity};
+    use super::ledger_ops::get_icp_ledger_balance;
+    use crate::core::utils::constants::LEDGER_CANISTER;
+
+    // Load minting identity
+    let identity = load_minting_identity().context("Failed to load minting identity")?;
+
+    // Create authenticated agent with minting identity
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent with minting identity")?;
+
+    let ledger_canister =
+        Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
+
+    // Get minting account principal
+    let minting_principal = agent
+        .get_principal()
+        .map_err(|e| anyhow::anyhow!("Failed to get minting account principal: {}", e))?;
+
+    // Get balance
+    let balance = get_icp_ledger_balance(&agent, ledger_canister, minting_principal, None)
+        .await
+        .context("Failed to get minting account balance")?;
+
+    Ok(balance)
+}
+
+/// Mint ICP tokens by transferring from minting account to a receiver
+pub async fn mint_icp_default_path(receiver_principal: Principal, amount_e8s: u64) -> Result<u64> {
+    use super::identity::{create_agent, load_minting_identity};
+    use super::ledger_ops::transfer_icp;
+    use crate::core::utils::constants::{ICP_TRANSFER_FEE, LEDGER_CANISTER};
+
+    // Load minting identity
+    let identity = load_minting_identity().context("Failed to load minting identity")?;
+
+    // Create authenticated agent with minting identity
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent with minting identity")?;
+
+    let ledger_canister =
+        Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
+
+    // Transfer ICP (amount includes fee)
+    let transfer_amount = amount_e8s + ICP_TRANSFER_FEE;
+    let block_height = transfer_icp(
+        &agent,
+        ledger_canister,
+        receiver_principal,
+        transfer_amount,
+        None,
+    )
+    .await
+    .context("Failed to transfer ICP")?;
+
+    Ok(block_height)
+}
+
+/// Create an ICP neuron by transferring ICP and claiming it
+pub async fn create_icp_neuron_default_path(
+    principal: Principal,
+    amount_e8s: u64,
+    memo: Option<u64>,
+) -> Result<u64> {
+    use super::identity::{create_agent, load_dfx_identity};
+    use super::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
+    use crate::core::utils::constants::{GOVERNANCE_CANISTER, ICP_TRANSFER_FEE, LEDGER_CANISTER};
+
+    // Load identity for the principal
+    let identity = load_dfx_identity(None).context("Failed to load dfx identity")?;
+
+    // Create authenticated agent
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent")?;
+
+    let ledger_canister =
+        Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
+    let governance_canister = Principal::from_text(GOVERNANCE_CANISTER)
+        .context("Failed to parse ICP Governance canister ID")?;
+
+    // Use provided memo or default to 1
+    let memo_value = memo.unwrap_or(1);
+
+    // Generate subaccount for neuron
+    let subaccount = generate_subaccount_by_nonce(memo_value, principal);
+
+    // Transfer ICP to governance subaccount (amount should include fee)
+    let transfer_amount = amount_e8s + ICP_TRANSFER_FEE;
+    transfer_icp(
+        &agent,
+        ledger_canister,
+        governance_canister,
+        transfer_amount,
+        Some(subaccount.0.to_vec()),
+    )
+    .await
+    .context("Failed to transfer ICP to governance subaccount")?;
+
+    // Wait a bit for the transfer to settle
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Claim neuron
+    let neuron_id = claim_neuron(&agent, governance_canister, memo_value)
+        .await
+        .context("Failed to claim ICP neuron")?;
+
+    Ok(neuron_id)
+}
+
 /// High-level function to set visibility for the ICP neuron used for SNS deployment
 /// This reads deployment data, loads the owner identity, and sets the visibility
 pub async fn set_icp_neuron_visibility_default_path(is_public: bool) -> Result<()> {

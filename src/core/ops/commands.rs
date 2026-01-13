@@ -5,9 +5,10 @@ use candid::Principal;
 use hex;
 
 use crate::core::ops::governance_ops::{
-    add_hotkey_to_icp_neuron_default_path, get_icp_neuron_default_path,
-    set_icp_neuron_visibility_default_path,
+    add_hotkey_to_icp_neuron_default_path, create_icp_neuron_default_path,
+    get_icp_neuron_default_path, mint_icp_default_path, set_icp_neuron_visibility_default_path,
 };
+use crate::core::ops::ledger_ops::{get_icp_ledger_balance, get_sns_ledger_balance};
 use crate::core::ops::sns_governance_ops::{
     add_hotkey_to_participant_neuron_default_path, create_sns_neuron_default_path,
     disburse_participant_neuron_default_path,
@@ -777,6 +778,384 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
     println!();
     println!("{}", json);
 
+    Ok(())
+}
+
+/// Handle mint-icp command
+pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Step 1: Get receiver principal (interactive if not provided)
+    let receiver_principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse receiver principal")?
+    } else {
+        print_header("Mint ICP");
+        print!("Enter receiver principal: ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+    };
+
+    // Get minting account balance to show user
+    use crate::core::ops::governance_ops::get_minting_account_balance;
+    let minting_balance = get_minting_account_balance()
+        .await
+        .context("Failed to get minting account balance")?;
+    let minting_balance_icp = minting_balance as f64 / 100_000_000.0;
+
+    // Step 2: Get amount (interactive if not provided)
+    let amount_e8s = if args.len() >= 4 {
+        args[3]
+            .parse::<u64>()
+            .context("Failed to parse amount_e8s")?
+    } else {
+        print_header("Mint ICP");
+        print_info(&format!("Receiver: {}", receiver_principal));
+        print_info(&format!(
+            "Available balance: {} e8s ({:.8} ICP)",
+            minting_balance, minting_balance_icp
+        ));
+        println!();
+        print!("Enter amount in e8s (e.g., 100000000 for 1 ICP): ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        input
+            .trim()
+            .parse::<u64>()
+            .context("Failed to parse amount - must be a number")?
+    };
+
+    print_header("Minting ICP");
+    print_info(&format!("Receiver: {}", receiver_principal));
+    print_info(&format!(
+        "Available balance: {} e8s ({:.8} ICP)",
+        minting_balance, minting_balance_icp
+    ));
+    let icp_amount = amount_e8s as f64 / 100_000_000.0;
+    print_info(&format!(
+        "Amount: {} e8s ({:.8} ICP)",
+        amount_e8s, icp_amount
+    ));
+
+    let block_height = mint_icp_default_path(receiver_principal, amount_e8s)
+        .await
+        .context("Failed to mint ICP")?;
+
+    print_success(&format!(
+        "ICP minted successfully! Transfer block height: {}",
+        block_height
+    ));
+    Ok(())
+}
+
+/// Handle create-icp-neuron command
+pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (default dfx identity if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        // Use default dfx identity principal
+        use crate::core::ops::identity::load_dfx_identity;
+        let identity = load_dfx_identity(None).context("Failed to load dfx identity")?;
+        identity.sender().unwrap_or(Principal::anonymous())
+    };
+
+    // Step 2: Get amount (interactive if not provided)
+    let amount_e8s = if args.len() >= 4 {
+        args[3]
+            .parse::<u64>()
+            .context("Failed to parse amount_e8s")?
+    } else {
+        print_header("Create ICP Neuron");
+        print_info(&format!("Principal: {}", principal));
+        println!();
+        print!("Enter amount in e8s to stake (e.g., 100000000 for 1 ICP): ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        input
+            .trim()
+            .parse::<u64>()
+            .context("Failed to parse amount - must be a number")?
+    };
+
+    // Step 3: Get memo (auto-increment based on neuron count if not provided)
+    // Try to count existing neurons to suggest next memo
+    use crate::core::ops::identity::create_agent;
+    use crate::core::utils::constants::GOVERNANCE_CANISTER;
+
+    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
+    let agent_for_query = create_agent(Box::new(anonymous_identity))
+        .await
+        .context("Failed to create agent for query")?;
+
+    let governance_canister = Principal::from_text(GOVERNANCE_CANISTER)
+        .context("Failed to parse ICP Governance canister ID")?;
+
+    // Try to list neurons using ICP governance's list_neurons method
+    let mut neuron_count = 0;
+
+    // Use the same ListNeurons structure as SNS governance
+    use super::super::declarations::icp_governance::{ListNeurons, ListNeuronsResponse};
+    use candid::Decode;
+    let list_request = ListNeurons {
+        of_principal: Some(principal),
+        limit: 100,
+        start_page_at: None,
+    };
+
+    if let Ok(response) = agent_for_query
+        .query(&governance_canister, "list_neurons")
+        .with_arg(candid::encode_args((list_request,))?)
+        .call()
+        .await
+    {
+        // Try to decode the response
+        if let Ok(list_response) = Decode!(&response, ListNeuronsResponse) {
+            neuron_count = list_response.neurons.len();
+        }
+    }
+
+    // Suggest memo = (neuron_count + 1) for next neuron
+    // Start from 1 if no neurons found
+    let suggested_memo = (neuron_count + 1) as u64;
+
+    let memo = if args.len() >= 5 {
+        Some(args[4].parse::<u64>().context("Failed to parse memo")?)
+    } else {
+        print_header("Create ICP Neuron");
+        print_info(&format!("Principal: {}", principal));
+        let icp_amount = amount_e8s as f64 / 100_000_000.0;
+        print_info(&format!(
+            "Amount: {} e8s ({:.8} ICP)",
+            amount_e8s, icp_amount
+        ));
+        if neuron_count > 0 {
+            print_info(&format!("Found {} existing neuron(s)", neuron_count));
+        }
+        print_info(&format!(
+            "Suggested memo: {} (auto-incremented)",
+            suggested_memo
+        ));
+        println!();
+        print!(
+            "Enter memo (or press Enter to use suggested memo {}): ",
+            suggested_memo
+        );
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+        if input.is_empty() {
+            Some(suggested_memo)
+        } else {
+            Some(
+                input
+                    .parse::<u64>()
+                    .context("Failed to parse memo - must be a number")?,
+            )
+        }
+    };
+
+    print_header("Creating ICP Neuron");
+    print_info(&format!("Principal: {}", principal));
+    let icp_amount = amount_e8s as f64 / 100_000_000.0;
+    print_info(&format!(
+        "Amount: {} e8s ({:.8} ICP)",
+        amount_e8s, icp_amount
+    ));
+    if let Some(m) = memo {
+        print_info(&format!("Memo: {} (auto-incremented)", m));
+    } else {
+        print_info(&format!("Memo: {} (default)", suggested_memo));
+    }
+
+    let neuron_id = create_icp_neuron_default_path(principal, amount_e8s, memo)
+        .await
+        .context("Failed to create ICP neuron")?;
+
+    print_success(&format!(
+        "ICP neuron created successfully! Neuron ID: {}",
+        neuron_id
+    ));
+    Ok(())
+}
+
+/// Handle get-icp-balance command
+pub async fn handle_get_icp_balance(args: &[String]) -> Result<()> {
+    use crate::core::ops::identity::create_agent;
+    use crate::core::utils::constants::LEDGER_CANISTER;
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (interactive if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        // Try to use default dfx identity principal
+        use crate::core::ops::identity::load_dfx_identity;
+        match load_dfx_identity(None)
+            .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
+        {
+            Ok(p) => p,
+            Err(_) => {
+                print_header("Get ICP Balance");
+                print!("Enter principal: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Principal::from_text(input.trim()).context("Failed to parse principal")?
+            }
+        }
+    };
+
+    // Step 2: Get subaccount (optional)
+    let subaccount = if args.len() >= 4 {
+        let hex_str = args[3].strip_prefix("0x").unwrap_or(&args[3]);
+        Some(hex::decode(hex_str).context("Failed to decode subaccount from hex")?)
+    } else {
+        None
+    };
+
+    print_header("Get ICP Balance");
+    print_info(&format!("Principal: {}", principal));
+    if let Some(ref sub) = subaccount {
+        let hex_sub = hex::encode(sub);
+        if hex_sub.len() >= 15 {
+            print_info(&format!(
+                "Subaccount: {}...{}",
+                &hex_sub[..7],
+                &hex_sub[hex_sub.len() - 8..]
+            ));
+        } else {
+            print_info(&format!("Subaccount: {}", hex_sub));
+        }
+    } else {
+        print_info("Subaccount: None (default account)");
+    }
+
+    // Create anonymous agent for query
+    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
+    let agent = create_agent(Box::new(anonymous_identity))
+        .await
+        .context("Failed to create agent")?;
+
+    let ledger_canister =
+        Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
+
+    let balance = get_icp_ledger_balance(&agent, ledger_canister, principal, subaccount)
+        .await
+        .context("Failed to get ICP balance")?;
+
+    let icp_amount = balance as f64 / 100_000_000.0;
+    println!();
+    print_success(&format!("Balance: {} e8s ({:.8} ICP)", balance, icp_amount));
+    Ok(())
+}
+
+/// Handle get-sns-balance command
+pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
+    use crate::core::ops::identity::create_agent;
+    use crate::core::utils::data_output;
+    use std::io::{self, Write};
+
+    // Read deployment data to get ledger canister ID
+    let deployment_path = data_output::get_output_path();
+    let data_content =
+        std::fs::read_to_string(&deployment_path).context("Failed to read deployment data")?;
+    let deployment_data: data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    let ledger_canister = deployment_data
+        .deployed_sns
+        .ledger_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse ledger canister ID from deployment data")?;
+
+    // Step 1: Get principal (interactive if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        // Try to select participant or use dfx identity
+        if deployment_path.exists() {
+            match select_participant() {
+                Ok(p) => p,
+                Err(_) => {
+                    // Fallback to dfx identity
+                    use crate::core::ops::identity::load_dfx_identity;
+                    match load_dfx_identity(None)
+                        .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
+                    {
+                        Ok(p) => p,
+                        Err(_) => {
+                            print_header("Get SNS Balance");
+                            print!("Enter principal: ");
+                            io::stdout().flush()?;
+                            let mut input = String::new();
+                            io::stdin().read_line(&mut input)?;
+                            Principal::from_text(input.trim())
+                                .context("Failed to parse principal")?
+                        }
+                    }
+                }
+            }
+        } else {
+            print_header("Get SNS Balance");
+            print!("Enter principal: ");
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            Principal::from_text(input.trim()).context("Failed to parse principal")?
+        }
+    };
+
+    // Step 2: Get subaccount (optional)
+    let subaccount = if args.len() >= 4 {
+        let hex_str = args[3].strip_prefix("0x").unwrap_or(&args[3]);
+        Some(hex::decode(hex_str).context("Failed to decode subaccount from hex")?)
+    } else {
+        None
+    };
+
+    print_header("Get SNS Balance");
+    print_info(&format!("Ledger Canister: {}", ledger_canister));
+    print_info(&format!("Principal: {}", principal));
+    if let Some(ref sub) = subaccount {
+        let hex_sub = hex::encode(sub);
+        if hex_sub.len() >= 15 {
+            print_info(&format!(
+                "Subaccount: {}...{}",
+                &hex_sub[..7],
+                &hex_sub[hex_sub.len() - 8..]
+            ));
+        } else {
+            print_info(&format!("Subaccount: {}", hex_sub));
+        }
+    } else {
+        print_info("Subaccount: None (default account)");
+    }
+
+    // Create anonymous agent for query
+    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
+    let agent = create_agent(Box::new(anonymous_identity))
+        .await
+        .context("Failed to create agent")?;
+
+    let balance = get_sns_ledger_balance(&agent, ledger_canister, principal, subaccount)
+        .await
+        .context("Failed to get SNS balance")?;
+
+    // Convert to token amount (assuming 8 decimals like ICP)
+    let token_amount = balance as f64 / 100_000_000.0;
+    println!();
+    print_success(&format!(
+        "Balance: {} e8s ({:.8} tokens)",
+        balance, token_amount
+    ));
     Ok(())
 }
 

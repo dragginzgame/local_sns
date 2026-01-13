@@ -4,9 +4,10 @@ mod init;
 use anyhow::Result;
 
 use core::ops::commands::{
-    handle_add_hotkey, handle_check_sns_deployed, handle_create_sns_neuron,
-    handle_disburse_sns_neuron, handle_get_icp_neuron, handle_increase_sns_dissolve_delay,
-    handle_list_neurons, handle_manage_sns_dissolving, handle_mint_sns_tokens,
+    handle_add_hotkey, handle_check_sns_deployed, handle_create_icp_neuron,
+    handle_create_sns_neuron, handle_disburse_sns_neuron, handle_get_icp_balance,
+    handle_get_icp_neuron, handle_get_sns_balance, handle_increase_sns_dissolve_delay,
+    handle_list_neurons, handle_manage_sns_dissolving, handle_mint_icp, handle_mint_sns_tokens,
     handle_set_icp_visibility,
 };
 use core::ops::deployment::deploy_sns;
@@ -31,6 +32,10 @@ async fn main() -> Result<()> {
             "manage-sns-dissolving" => return handle_manage_sns_dissolving(&args).await,
             "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
             "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
+            "get-icp-balance" => return handle_get_icp_balance(&args).await,
+            "get-sns-balance" => return handle_get_sns_balance(&args).await,
+            "mint-icp" => return handle_mint_icp(&args).await,
+            "create-icp-neuron" => return handle_create_icp_neuron(&args).await,
             "check-sns-deployed" => return handle_check_sns_deployed(&args).await,
             _ => {
                 eprintln!("Unknown command: {}", args[1]);
@@ -48,7 +53,11 @@ async fn main() -> Result<()> {
                 );
                 eprintln!("  manage-sns-dissolving    - Start or stop dissolving an SNS neuron");
                 eprintln!("  set-icp-visibility       - Set ICP neuron visibility");
-                eprintln!("  get-icp-neuron      - Get ICP neuron information");
+                eprintln!("  get-icp-neuron           - Get ICP neuron information");
+                eprintln!("  get-icp-balance          - Get ICP ledger balance for an account");
+                eprintln!("  get-sns-balance          - Get SNS ledger balance for an account");
+                eprintln!("  mint-icp                 - Mint ICP tokens from minting account");
+                eprintln!("  create-icp-neuron        - Create an ICP neuron by staking ICP");
                 std::process::exit(1);
             }
         }

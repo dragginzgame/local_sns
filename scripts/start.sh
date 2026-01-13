@@ -60,9 +60,10 @@ check_sns_deployed() {
 # Check if a menu option requires SNS to be deployed
 requires_sns_deployment() {
     local choice="$1"
-    # Options d (Deploy SNS) and b (Rebuild Binary) don't require SNS to be deployed
+    # Options 10 (Get ICP Balance), 12 (Mint ICP), 13 (Create ICP Neuron), 14 (Deploy SNS), and 15 (Rebuild Binary) don't require SNS to be deployed
+    # Option 11 (Get SNS Balance) requires SNS deployment
     case "$choice" in
-        d|b|B)
+        10|12|13|14|15)
             return 1  # Doesn't require SNS
             ;;
         *)
@@ -108,15 +109,27 @@ show_menu() {
     echo -e "  ${GREEN}9${NC}         Set ICP Neuron Visibility"
     echo -e "     Set the ICP neuron to public or private"
     echo ""
-    echo -e "     [${GREEN}d${NC}]  Deploy New SNS"
+    echo -e "  ${GREEN}10${NC}        Get ICP Balance"
+    echo -e "     Get ICP ledger balance for an account"
+    echo ""
+    echo -e "  ${GREEN}11${NC}        Get SNS Balance"
+    echo -e "     Get SNS ledger balance for an account"
+    echo ""
+    echo -e "  ${GREEN}12${NC}        Mint ICP Tokens"
+    echo -e "     Mint ICP tokens from minting account to a receiver"
+    echo ""
+    echo -e "  ${GREEN}13${NC}        Create ICP Neuron"
+    echo -e "     Create an ICP neuron by staking ICP tokens"
+    echo ""
+    echo -e "  ${GREEN}14${NC}        Deploy New SNS"
     echo -e "     Create a new SNS instance (creates a separate SNS, does not replace existing)"
     echo ""
-    echo -e "     [${GREEN}b${NC}]  Rebuild Binary"
+    echo -e "  ${GREEN}15${NC}        Rebuild Binary"
     echo -e "     Rebuild the Rust binary (useful after code changes)"
     echo ""
     echo -e "  ${GREEN}0${NC}         Exit"
     echo ""
-    echo -n -e "${CYAN}Select an option [0-9, H, L, C, D, M, I, DD, d, b]: ${NC}"
+    echo -n -e "${CYAN}Select an option [0-15, H, L, C, D, M, I, DD]: ${NC}"
 }
 
 # Run selected script
@@ -130,7 +143,7 @@ run_script() {
         if ! check_sns_deployed; then
             print_error "No SNS deployment found on the network!"
             echo ""
-            print_info "Please deploy an SNS first using option d (Deploy New SNS)."
+            print_info "Please deploy an SNS first using option 14 (Deploy New SNS)."
             print_info "Configuration can be modified in src/init/sns_config.rs"
             echo ""
             return 1
@@ -190,13 +203,32 @@ run_script() {
             shift
             script_args=("$@")
             ;;
-        d)
-            # Lowercase 'd' for Deploy (uppercase 'D' is handled above for Disburse)
+        10)
+            script_name="get_icp_balance.sh"
+            shift
+            script_args=("$@")
+            ;;
+        11)
+            script_name="get_sns_balance.sh"
+            shift
+            script_args=("$@")
+            ;;
+        12)
+            script_name="mint_icp.sh"
+            shift
+            script_args=("$@")
+            ;;
+        13)
+            script_name="create_icp_neuron.sh"
+            shift
+            script_args=("$@")
+            ;;
+        14)
             script_name="deploy_local_sns.sh"
             shift
             script_args=("$@")
             ;;
-        b|B)
+        15)
             print_header "Rebuilding Binary"
             bash "$SCRIPT_DIR/build.sh"
             print_success "Binary rebuilt successfully!"
@@ -264,8 +296,8 @@ main() {
         print_info "Configuration can be modified in src/init/sns_config.rs"
         echo ""
         read -r
-        # Automatically deploy SNS (option d)
-        run_script d
+        # Automatically deploy SNS (option 14)
+        run_script 14
         echo ""
         echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
         read -r
@@ -281,7 +313,7 @@ main() {
                 print_info "Exiting..."
                 exit 0
                 ;;
-            [1-9]|[hH]|[lL]|[cC]|[dD]|[mM]|[iI]|dd|DD|b|B)
+            [1-9]|1[0-5]|[hH]|[lL]|[cC]|[dD]|[mM]|[iI]|dd|DD)
                 run_script "$choice"
                 echo ""
                 echo -n -e "${CYAN}Press Enter to return to menu...${NC}"

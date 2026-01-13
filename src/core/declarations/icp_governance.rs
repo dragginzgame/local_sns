@@ -685,3 +685,15 @@ pub enum Result2 {
 pub struct ManageNeuronResponse {
     pub command: Option<Command1>,
 }
+
+#[derive(CandidType, Deserialize)]
+pub struct ListNeurons {
+    pub of_principal: Option<Principal>,
+    pub limit: u32,
+    pub start_page_at: Option<NeuronId>,
+}
+
+#[derive(CandidType, Deserialize)]
+pub struct ListNeuronsResponse {
+    pub neurons: Vec<Neuron>,
+}

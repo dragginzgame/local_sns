@@ -86,6 +86,32 @@ pub async fn get_sns_ledger_fee(agent: &Agent, ledger_canister: Principal) -> Re
     Ok(digits.first().copied().unwrap_or(0))
 }
 
+/// Get ICP ledger balance for an account
+pub async fn get_icp_ledger_balance(
+    agent: &Agent,
+    ledger_canister: Principal,
+    account: Principal,
+    subaccount: Option<Vec<u8>>,
+) -> Result<u64> {
+    let account = LedgerAccount {
+        owner: account,
+        subaccount,
+    };
+
+    let result_bytes = agent
+        .query(&ledger_canister, "icrc1_balance_of")
+        .with_arg(encode_args((account,))?)
+        .call()
+        .await
+        .context("Failed to call icrc1_balance_of")?;
+
+    let balance: Nat = Decode!(&result_bytes, Nat).context("Failed to decode balance")?;
+
+    // Convert candid::Nat to u64
+    let digits = balance.0.to_u64_digits();
+    Ok(digits.first().copied().unwrap_or(0))
+}
+
 /// Get SNS ledger balance for an account
 pub async fn get_sns_ledger_balance(
     agent: &Agent,
