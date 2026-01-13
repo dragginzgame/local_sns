@@ -9,9 +9,11 @@ use crate::core::ops::governance_ops::{
     set_icp_neuron_visibility_default_path,
 };
 use crate::core::ops::sns_governance_ops::{
-    add_hotkey_to_participant_neuron_default_path, disburse_participant_neuron_default_path,
-    list_neurons_for_principal_default_path, mint_sns_tokens_with_all_votes_default_path,
+    add_hotkey_to_participant_neuron_default_path, create_sns_neuron_default_path,
+    disburse_participant_neuron_default_path, list_neurons_for_principal_default_path,
+    mint_sns_tokens_with_all_votes_default_path,
 };
+use crate::core::ops::snsw_ops::check_sns_deployed_default_path;
 use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
 /// Helper function to select a participant interactively
@@ -564,8 +566,166 @@ pub async fn handle_mint_sns_tokens(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Handle create-sns-neuron command
+pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
+    use crate::core::ops::identity::create_agent;
+    use crate::core::ops::sns_governance_ops::get_neuron_minimum_stake;
+    use crate::core::utils::data_output::get_output_path;
+    use std::fs;
+
+    // Read deployment data to get governance canister ID
+    let deployment_path = get_output_path();
+    let data_content =
+        fs::read_to_string(&deployment_path).context("Failed to read deployment data")?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    let governance_canister = deployment_data
+        .deployed_sns
+        .governance_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse governance canister ID from deployment data")?;
+
+    // Get minimum stake (using anonymous identity for query)
+    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
+    let agent = create_agent(Box::new(anonymous_identity))
+        .await
+        .context("Failed to create agent")?;
+    let minimum_stake = get_neuron_minimum_stake(&agent, governance_canister)
+        .await
+        .context("Failed to get minimum stake")?;
+
+    // Step 1: Get principal (select participant if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Get balance and fee to show user options
+    use crate::core::ops::ledger_ops::{get_sns_ledger_balance, get_sns_ledger_fee};
+    let ledger_canister = deployment_data
+        .deployed_sns
+        .ledger_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse ledger canister ID from deployment data")?;
+
+    let balance = get_sns_ledger_balance(&agent, ledger_canister, principal, None)
+        .await
+        .context("Failed to get SNS ledger balance")?;
+    let transfer_fee = get_sns_ledger_fee(&agent, ledger_canister)
+        .await
+        .context("Failed to get SNS ledger transfer fee")?;
+
+    // Step 2: Get optional amount (interactive if not provided)
+    use std::io::{self, Write};
+    let amount_e8s = if args.len() >= 4 {
+        Some(
+            args[3]
+                .parse::<u64>()
+                .context("Failed to parse amount_e8s")?,
+        )
+    } else {
+        // Interactive prompt for amount
+        print_header("Creating SNS Neuron");
+        print_info(&format!("Principal: {}", principal));
+        print_info(&format!("Available balance: {} e8s", balance));
+        print_info(&format!("Transfer fee: {} e8s", transfer_fee));
+        print_info(&format!("Minimum stake required: {} e8s", minimum_stake));
+        let max_available = if balance > transfer_fee {
+            balance - transfer_fee
+        } else {
+            0
+        };
+        if max_available >= minimum_stake {
+            print_info(&format!(
+                "Maximum stakeable (balance - fee): {} e8s",
+                max_available
+            ));
+        }
+        println!();
+        print!(
+            "Enter amount to stake in e8s (or press Enter to use maximum: {} e8s): ",
+            max_available
+        );
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            // Use maximum available
+            if max_available < minimum_stake {
+                anyhow::bail!(
+                    "Insufficient balance: maximum available {} e8s is less than minimum stake {} e8s",
+                    max_available,
+                    minimum_stake
+                );
+            }
+            None // Will be handled in create_sns_neuron as "all available"
+        } else {
+            let amount: u64 = input
+                .parse()
+                .context("Failed to parse amount - must be a number")?;
+            Some(amount)
+        }
+    };
+
+    // Step 3: Get optional memo
+    let memo = if args.len() >= 5 {
+        Some(args[4].parse::<u64>().context("Failed to parse memo")?)
+    } else {
+        None
+    };
+
+    // Get existing neuron count to show what memo will be used
+    let existing_neurons = list_neurons_for_principal_default_path(principal)
+        .await
+        .context("Failed to list existing neurons")?;
+    let neuron_count = existing_neurons.len();
+    let auto_memo = neuron_count + 1;
+
+    if args.len() >= 4 {
+        // Show header if amount was provided via args
+        print_header("Creating SNS Neuron");
+        print_info(&format!("Principal: {}", principal));
+        print_info(&format!("Existing neurons: {}", neuron_count));
+        print_info(&format!("Minimum stake required: {} e8s", minimum_stake));
+        if let Some(amount) = amount_e8s {
+            print_info(&format!("Amount: {} e8s", amount));
+        }
+        if let Some(m) = memo {
+            print_info(&format!("Memo: {} (specified)", m));
+        } else {
+            print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
+        }
+    } else {
+        // Amount was entered interactively, show memo info
+        print_info(&format!("Existing neurons: {}", neuron_count));
+        if let Some(m) = memo {
+            print_info(&format!("Memo: {} (specified)", m));
+        } else {
+            print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
+        }
+    }
+
+    let neuron_id = create_sns_neuron_default_path(principal, amount_e8s, memo)
+        .await
+        .context("Failed to create SNS neuron")?;
+
+    let hex_id = hex::encode(&neuron_id);
+    print_success(&format!(
+        "SNS neuron created successfully! Neuron ID: {}",
+        hex_id
+    ));
+    Ok(())
+}
+
 /// Handle disburse-sns-neuron command
-pub async fn handle_disburse_neuron(args: &[String]) -> Result<()> {
+pub async fn handle_disburse_sns_neuron(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
     // Step 1: Get participant principal (select if not provided)
@@ -700,4 +860,20 @@ fn print_add_hotkey_usage(program_name: &str) {
         program_name
     );
     eprintln!("  {} add-hotkey icp <hotkey_principal>", program_name);
+}
+
+/// Handle check-sns-deployed command
+/// Returns exit code 0 if deployed, 1 if not deployed
+pub async fn handle_check_sns_deployed(_args: &[String]) -> Result<()> {
+    let deployed = check_sns_deployed_default_path()
+        .await
+        .context("Failed to check SNS deployment status")?;
+
+    if deployed {
+        // Exit with 0 if deployed
+        std::process::exit(0);
+    } else {
+        // Exit with 1 if not deployed
+        std::process::exit(1);
+    }
 }

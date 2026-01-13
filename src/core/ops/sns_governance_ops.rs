@@ -1,15 +1,19 @@
 // SNS Governance canister operations
 
 use anyhow::{Context, Result};
-use candid::{Decode, Principal};
+use candid::{Decode, Principal, encode_args};
 use ic_agent::Agent;
 use std::path::PathBuf;
 
 #[allow(unused_imports)]
 use super::super::declarations::sns_governance::{
-    Account, Action, AddNeuronPermissions, Command, Disburse, DissolveState, GetProposal,
-    ListNeurons, ListNeuronsResponse, ManageNeuron, ManageNeuronResponse, MintSnsTokens, Neuron,
+    Account, Action, AddNeuronPermissions, By, ClaimOrRefresh, Command, Command1, Disburse,
+    DissolveState, GetProposal, Governance, ListNeurons, ListNeuronsResponse, ManageNeuron,
+    ManageNeuronResponse, MemoAndController, MintSnsTokens, NervousSystemParameters, Neuron,
     NeuronId, NeuronPermissionList, Proposal, ProposalId, RegisterVote,
+};
+use super::ledger_ops::{
+    generate_subaccount_by_nonce, get_sns_ledger_balance, get_sns_ledger_fee, transfer_sns_tokens,
 };
 
 /// List all neurons for a given principal, sorted by dissolve delay (lowest first) and cached stake (highest first)
@@ -59,6 +63,26 @@ pub async fn list_neurons_for_principal(
     });
 
     Ok(neurons)
+}
+
+/// Get neuron minimum stake from SNS governance parameters
+pub async fn get_neuron_minimum_stake(
+    agent: &Agent,
+    governance_canister: Principal,
+) -> Result<u64> {
+    let result_bytes = agent
+        .query(&governance_canister, "get_nervous_system_parameters")
+        .with_arg(encode_args(())?)
+        .call()
+        .await
+        .context("Failed to call get_nervous_system_parameters")?;
+
+    let params: NervousSystemParameters = Decode!(&result_bytes, NervousSystemParameters)
+        .context("Failed to decode nervous system parameters")?;
+
+    params
+        .neuron_minimum_stake_e8s
+        .ok_or_else(|| anyhow::anyhow!("neuron_minimum_stake_e8s not set in governance parameters"))
 }
 
 /// High-level function to list neurons for a principal
@@ -706,4 +730,208 @@ pub async fn mint_sns_tokens_with_all_votes_default_path(
         amount_e8s,
     )
     .await
+}
+
+/// Claim an SNS neuron by memo and controller
+pub async fn claim_sns_neuron(
+    agent: &Agent,
+    governance_canister: Principal,
+    memo: u64,
+    controller: Principal,
+) -> Result<Vec<u8>> {
+    let subaccount = generate_subaccount_by_nonce(memo, controller);
+    let by = By::MemoAndController(MemoAndController {
+        memo,
+        controller: Some(controller),
+    });
+
+    let command = Command::ClaimOrRefresh(ClaimOrRefresh { by: Some(by) });
+    let request = ManageNeuron {
+        subaccount: subaccount.0.to_vec(),
+        command: Some(command),
+    };
+    let args = encode_args((request,))?;
+
+    let response = agent
+        .update(&governance_canister, "manage_neuron")
+        .with_arg(args)
+        .call_and_wait()
+        .await
+        .context("Failed to call manage_neuron")?;
+
+    let result: ManageNeuronResponse = Decode!(&response, ManageNeuronResponse)
+        .context("Failed to decode manage_neuron response")?;
+
+    match result.command {
+        Some(Command1::ClaimOrRefresh(response)) => {
+            if let Some(neuron_id) = response.refreshed_neuron_id {
+                Ok(neuron_id.id)
+            } else {
+                anyhow::bail!("Failed to claim neuron: no neuron ID in response");
+            }
+        }
+        Some(Command1::Error(e)) => {
+            anyhow::bail!(
+                "Failed to claim neuron: {} (type: {})",
+                e.error_message,
+                e.error_type
+            );
+        }
+        _ => anyhow::bail!("Unexpected response from manage_neuron"),
+    }
+}
+
+/// Create an SNS neuron by checking balance, transferring tokens, and claiming
+/// Returns the neuron subaccount (ID) if successful
+pub async fn create_sns_neuron_default_path(
+    principal: Principal,
+    amount_e8s: Option<u64>,
+    memo: Option<u64>,
+) -> Result<Vec<u8>> {
+    let deployment_path = crate::core::utils::data_output::get_output_path();
+    create_sns_neuron(&deployment_path, principal, amount_e8s, memo).await
+}
+
+/// Create an SNS neuron by checking balance, transferring tokens, and claiming
+/// Returns the neuron subaccount (ID) if successful
+pub async fn create_sns_neuron(
+    deployment_data_path: &std::path::Path,
+    principal: Principal,
+    amount_e8s: Option<u64>,
+    memo: Option<u64>,
+) -> Result<Vec<u8>> {
+    use super::identity::{create_agent, load_identity_from_seed_file};
+
+    // Read deployment data
+    let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
+        format!(
+            "Failed to read deployment data from: {:?}",
+            deployment_data_path
+        )
+    })?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    // Get ledger and governance canister IDs
+    let ledger_canister = deployment_data
+        .deployed_sns
+        .ledger_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse ledger canister ID from deployment data")?;
+    let governance_canister = deployment_data
+        .deployed_sns
+        .governance_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse governance canister ID from deployment data")?;
+
+    // Try to find principal in deployment data to load identity
+    let agent = if let Some(participant_data) = deployment_data
+        .participants
+        .iter()
+        .find(|p| p.principal == principal.to_string())
+    {
+        // Load participant identity
+        let seed_path = PathBuf::from(&participant_data.seed_file);
+        let identity = load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with participant identity")?
+    } else {
+        // Try to load as dfx identity
+        use super::identity::load_dfx_identity;
+        let identity =
+            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with dfx identity")?
+    };
+
+    // Get minimum stake and transfer fee
+    let minimum_stake = get_neuron_minimum_stake(&agent, governance_canister)
+        .await
+        .context("Failed to get neuron minimum stake")?;
+    let transfer_fee = get_sns_ledger_fee(&agent, ledger_canister)
+        .await
+        .context("Failed to get SNS ledger transfer fee")?;
+
+    // Check balance
+    let balance = get_sns_ledger_balance(&agent, ledger_canister, principal, None)
+        .await
+        .context("Failed to get SNS ledger balance")?;
+
+    // Determine amount to stake (use provided amount or all available minus fee)
+    let stake_amount = if let Some(amount) = amount_e8s {
+        if amount > balance {
+            anyhow::bail!(
+                "Insufficient balance: {} e8s requested, but only {} e8s available",
+                amount,
+                balance
+            );
+        }
+        amount
+    } else {
+        // Use all available balance, but ensure we have enough for minimum stake + fee
+        if balance < minimum_stake + transfer_fee {
+            anyhow::bail!(
+                "Insufficient balance: {} e8s available, but need at least {} e8s (minimum stake: {} e8s + fee: {} e8s)",
+                balance,
+                minimum_stake + transfer_fee,
+                minimum_stake,
+                transfer_fee
+            );
+        }
+        // Deduct fee from balance when using all available
+        balance - transfer_fee
+    };
+
+    // Check minimum stake requirement
+    if stake_amount < minimum_stake {
+        anyhow::bail!(
+            "Insufficient stake amount: {} e8s specified, but minimum stake is {} e8s",
+            stake_amount,
+            minimum_stake
+        );
+    }
+
+    // Determine memo: use provided memo, or generate based on existing neuron count
+    let memo_value = if let Some(m) = memo {
+        m
+    } else {
+        // List existing neurons to determine next memo number
+        let existing_neurons = list_neurons_for_principal(&agent, governance_canister, principal)
+            .await
+            .context("Failed to list existing neurons")?;
+
+        // Use neuron count + 1 as the memo (starting from 1)
+        // This ensures each new neuron gets a unique memo
+        let neuron_count = existing_neurons.len() as u64;
+        neuron_count + 1
+    };
+
+    // Generate subaccount for neuron
+    let subaccount = generate_subaccount_by_nonce(memo_value, principal);
+
+    // Transfer SNS tokens to governance canister subaccount
+    transfer_sns_tokens(
+        &agent,
+        ledger_canister,
+        governance_canister,
+        stake_amount,
+        Some(subaccount.0.to_vec()),
+    )
+    .await
+    .context("Failed to transfer SNS tokens to governance subaccount")?;
+
+    // Wait a bit for the transfer to settle
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    // Claim neuron
+    let neuron_id = claim_sns_neuron(&agent, governance_canister, memo_value, principal)
+        .await
+        .context("Failed to claim SNS neuron")?;
+
+    Ok(neuron_id)
 }

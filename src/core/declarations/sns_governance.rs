@@ -4,6 +4,7 @@
     dead_code,
     unused_imports,
     renamed_and_removed_lints,
+    unknown_lints,
     large_enum_variant,
     clippy::vec_box
 )]

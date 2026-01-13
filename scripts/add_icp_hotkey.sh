@@ -98,21 +98,6 @@ if ! dfx ping >/dev/null 2>&1; then
     exit 1
 fi
 
-# Check if Rust toolchain is available
-if ! command -v cargo &> /dev/null; then
-    print_error "cargo is not installed. Please install Rust toolchain."
-    exit 1
-fi
-
-# Build the binary if needed
-print_info "Building local_sns binary..."
-if cargo build --bin local_sns --release 2>/dev/null; then
-    print_success "Binary built successfully"
-else
-    print_warning "Release build failed, trying dev build..."
-    cargo build --bin local_sns
-fi
-
 # Use the Rust binary's add-hotkey command for ICP
 print_header "Adding Hotkey via Rust Binary"
 
