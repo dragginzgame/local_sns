@@ -463,18 +463,20 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
   - Shows menu (public/private) if not provided
 
+- **`mint_sns_tokens.sh`** - Mint tokens via governance proposal (interactive)
+
+  - Prompts for proposer, receiver, and amount if not provided
+  - **Important**: Mint tokens before creating neurons - you need tokens in your ledger balance to stake them
+
 - **`create_sns_neuron.sh`** - Create an SNS neuron by staking tokens (interactive)
 
   - Prompts for principal, amount, memo, and dissolve delay
   - Displays available balance, transfer fee, and minimum stake
   - Auto-generates memo based on neuron count
+  - **Note**: Requires tokens in ledger balance (mint tokens first using `mint_sns_tokens.sh`)
 
 - **`disburse_sns_neuron.sh`** - Disburse tokens from SNS neuron (interactive)
-
   - Prompts for participant, neuron, and receiver if not provided
-
-- **`mint_sns_tokens.sh`** - Mint tokens via governance proposal (interactive)
-  - Prompts for proposer, receiver, and amount if not provided
 
 All scripts can be run with arguments to skip prompts, or without arguments for full interactivity.
 
