@@ -60,9 +60,9 @@ check_sns_deployed() {
 # Check if a menu option requires SNS to be deployed
 requires_sns_deployment() {
     local choice="$1"
-    # Options 9 (Redeploy SNS) and b (Rebuild Binary) don't require SNS to be deployed
+    # Options d (Deploy SNS) and b (Rebuild Binary) don't require SNS to be deployed
     case "$choice" in
-        9|b|B)
+        d|b|B)
             return 1  # Doesn't require SNS
             ;;
         *)
@@ -78,39 +78,45 @@ show_menu() {
     echo ""
     echo -e "${CYAN}Available Operations:${NC}"
     echo ""
-    echo -e "  ${GREEN}1)${NC} Add SNS Neuron Hotkey"
+    echo -e "  ${GREEN}1${NC} / [${GREEN}H${NC}]  Add SNS Neuron Hotkey"
     echo -e "     Add a hotkey to an SNS participant neuron (interactive)"
     echo ""
-    echo -e "  ${GREEN}2)${NC} Add ICP Neuron Hotkey"
-    echo -e "     Add a hotkey to the ICP neuron used for SNS deployment"
-    echo ""
-    echo -e "  ${GREEN}3)${NC} List SNS Neurons"
+    echo -e "  ${GREEN}2${NC} / [${GREEN}L${NC}]  List SNS Neurons"
     echo -e "     Query and display SNS neurons for a principal (interactive)"
     echo ""
-    echo -e "  ${GREEN}4)${NC} Get ICP Neuron Info"
-    echo -e "     Get detailed information about the ICP neuron"
-    echo ""
-    echo -e "  ${GREEN}5)${NC} Set ICP Neuron Visibility"
-    echo -e "     Set the ICP neuron to public or private"
-    echo ""
-    echo -e "  ${GREEN}6)${NC} Create SNS Neuron"
+    echo -e "  ${GREEN}3${NC} / [${GREEN}C${NC}]  Create SNS Neuron"
     echo -e "     Create an SNS neuron by staking tokens from ledger balance"
     echo ""
-    echo -e "  ${GREEN}7)${NC} Disburse SNS Neuron"
+    echo -e "  ${GREEN}4${NC} / [${GREEN}D${NC}]  Disburse SNS Neuron"
     echo -e "     Disburse tokens from an SNS neuron"
     echo ""
-    echo -e "  ${GREEN}8)${NC} Mint SNS Tokens"
+    echo -e "  ${GREEN}5${NC} / [${GREEN}M${NC}]  Mint SNS Tokens"
     echo -e "     Mint additional tokens to an account"
     echo ""
-    echo -e "  ${GREEN}9)${NC} Deploy New SNS"
+    echo -e "  ${GREEN}6${NC} / [${GREEN}I${NC}]  Increase SNS Neuron Dissolve Delay"
+    echo -e "     Add dissolve delay to an SNS neuron"
+    echo ""
+    echo -e "     [${GREEN}DD${NC}] Dissolve SNS Neuron"
+    echo -e "     Start or stop dissolving for an SNS neuron"
+    echo ""
+    echo -e "  ${GREEN}7${NC}         Add ICP Neuron Hotkey"
+    echo -e "     Add a hotkey to the ICP neuron used for SNS deployment"
+    echo ""
+    echo -e "  ${GREEN}8${NC}         Get ICP Neuron Info"
+    echo -e "     Get detailed information about the ICP neuron"
+    echo ""
+    echo -e "  ${GREEN}9${NC}         Set ICP Neuron Visibility"
+    echo -e "     Set the ICP neuron to public or private"
+    echo ""
+    echo -e "     [${GREEN}d${NC}]  Deploy New SNS"
     echo -e "     Create a new SNS instance (creates a separate SNS, does not replace existing)"
     echo ""
-    echo -e "  ${GREEN}b)${NC} Rebuild Binary"
+    echo -e "     [${GREEN}b${NC}]  Rebuild Binary"
     echo -e "     Rebuild the Rust binary (useful after code changes)"
     echo ""
-    echo -e "  ${GREEN}0)${NC} Exit"
+    echo -e "  ${GREEN}0${NC}         Exit"
     echo ""
-    echo -n -e "${CYAN}Select an option [0-9, b]: ${NC}"
+    echo -n -e "${CYAN}Select an option [0-9, H, L, C, D, M, I, DD, d, b]: ${NC}"
 }
 
 # Run selected script
@@ -124,7 +130,7 @@ run_script() {
         if ! check_sns_deployed; then
             print_error "No SNS deployment found on the network!"
             echo ""
-            print_info "Please deploy an SNS first using option 9 (Deploy New SNS)."
+            print_info "Please deploy an SNS first using option d (Deploy New SNS)."
             print_info "Configuration can be modified in src/init/sns_config.rs"
             echo ""
             return 1
@@ -132,48 +138,60 @@ run_script() {
     fi
     
     case "$choice" in
-        1)
+        1|h|H)
             script_name="add_sns_hotkey.sh"
             # Pass through any additional arguments
             shift
             script_args=("$@")
             ;;
-        2)
-            script_name="add_icp_hotkey.sh"
-            shift
-            script_args=("$@")
-            ;;
-        3)
+        2|l|L)
             script_name="get_sns_neurons.sh"
             shift
             script_args=("$@")
             ;;
-        4)
-            script_name="get_icp_neuron.sh"
-            shift
-            script_args=("$@")
-            ;;
-        5)
-            script_name="set_icp_visibility.sh"
-            shift
-            script_args=("$@")
-            ;;
-        6)
+        3|c|C)
             script_name="create_sns_neuron.sh"
             shift
             script_args=("$@")
             ;;
-        7)
+        4|D)
+            # '4' or uppercase 'D' for Disburse
             script_name="disburse_sns_neuron.sh"
             shift
             script_args=("$@")
             ;;
-        8)
+        5|m|M)
             script_name="mint_sns_tokens.sh"
             shift
             script_args=("$@")
             ;;
+        6|i|I)
+            script_name="increase_sns_dissolve_delay.sh"
+            shift
+            script_args=("$@")
+            ;;
+        dd|DD)
+            script_name="manage_sns_dissolving.sh"
+            shift
+            script_args=("$@")
+            ;;
+        7)
+            script_name="add_icp_hotkey.sh"
+            shift
+            script_args=("$@")
+            ;;
+        8)
+            script_name="get_icp_neuron.sh"
+            shift
+            script_args=("$@")
+            ;;
         9)
+            script_name="set_icp_visibility.sh"
+            shift
+            script_args=("$@")
+            ;;
+        d)
+            # Lowercase 'd' for Deploy (uppercase 'D' is handled above for Disburse)
             script_name="deploy_local_sns.sh"
             shift
             script_args=("$@")
@@ -246,8 +264,8 @@ main() {
         print_info "Configuration can be modified in src/init/sns_config.rs"
         echo ""
         read -r
-        # Automatically deploy SNS (option 9)
-        run_script 9
+        # Automatically deploy SNS (option d)
+        run_script d
         echo ""
         echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
         read -r
@@ -263,20 +281,14 @@ main() {
                 print_info "Exiting..."
                 exit 0
                 ;;
-            [1-9])
-                run_script "$choice"
-                echo ""
-                echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-                read -r
-                ;;
-            b|B)
+            [1-9]|[hH]|[lL]|[cC]|[dD]|[mM]|[iI]|dd|DD|b|B)
                 run_script "$choice"
                 echo ""
                 echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
                 read -r
                 ;;
             *)
-                print_error "Invalid option. Please select 0-9 or b."
+                print_error "Invalid option. Please see menu for available options."
                 sleep 1
                 ;;
         esac

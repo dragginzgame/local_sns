@@ -782,7 +782,7 @@ pub async fn claim_sns_neuron(
     }
 }
 
-/// Set dissolve delay for an SNS neuron
+/// Set dissolve delay for an SNS neuron (increases by the specified amount)
 pub async fn set_sns_dissolve_delay(
     agent: &Agent,
     governance_canister: Principal,
@@ -822,6 +822,263 @@ pub async fn set_sns_dissolve_delay(
         }
         _ => anyhow::bail!("Unexpected response from manage_neuron"),
     }
+}
+
+/// Start dissolving an SNS neuron
+pub async fn start_dissolving_sns_neuron(
+    agent: &Agent,
+    governance_canister: Principal,
+    neuron_subaccount: Vec<u8>,
+) -> Result<()> {
+    let command = Command::Configure(Configure {
+        operation: Some(Operation::StartDissolving {}),
+    });
+
+    let request = ManageNeuron {
+        subaccount: neuron_subaccount,
+        command: Some(command),
+    };
+    let args = encode_args((request,))?;
+
+    let response = agent
+        .update(&governance_canister, "manage_neuron")
+        .with_arg(args)
+        .call_and_wait()
+        .await
+        .context("Failed to call manage_neuron to start dissolving")?;
+
+    let result: ManageNeuronResponse = Decode!(&response, ManageNeuronResponse)
+        .context("Failed to decode manage_neuron response")?;
+
+    match result.command {
+        Some(Command1::Configure {}) => Ok(()),
+        Some(Command1::Error(e)) => {
+            anyhow::bail!(
+                "Failed to start dissolving: {} (type: {})",
+                e.error_message,
+                e.error_type
+            );
+        }
+        _ => anyhow::bail!("Unexpected response from manage_neuron"),
+    }
+}
+
+/// Stop dissolving an SNS neuron
+pub async fn stop_dissolving_sns_neuron(
+    agent: &Agent,
+    governance_canister: Principal,
+    neuron_subaccount: Vec<u8>,
+) -> Result<()> {
+    let command = Command::Configure(Configure {
+        operation: Some(Operation::StopDissolving {}),
+    });
+
+    let request = ManageNeuron {
+        subaccount: neuron_subaccount,
+        command: Some(command),
+    };
+    let args = encode_args((request,))?;
+
+    let response = agent
+        .update(&governance_canister, "manage_neuron")
+        .with_arg(args)
+        .call_and_wait()
+        .await
+        .context("Failed to call manage_neuron to stop dissolving")?;
+
+    let result: ManageNeuronResponse = Decode!(&response, ManageNeuronResponse)
+        .context("Failed to decode manage_neuron response")?;
+
+    match result.command {
+        Some(Command1::Configure {}) => Ok(()),
+        Some(Command1::Error(e)) => {
+            anyhow::bail!(
+                "Failed to stop dissolving: {} (type: {})",
+                e.error_message,
+                e.error_type
+            );
+        }
+        _ => anyhow::bail!("Unexpected response from manage_neuron"),
+    }
+}
+
+/// High-level function to increase dissolve delay for a participant's neuron
+/// This reads deployment data, loads the participant identity, and increases dissolve delay
+pub async fn increase_dissolve_delay_participant_neuron_default_path(
+    participant_principal: Principal,
+    additional_dissolve_delay_seconds: u64,
+    neuron_id: Option<Vec<u8>>,
+) -> Result<()> {
+    use super::identity::{create_agent, load_identity_from_seed_file};
+    use std::path::PathBuf;
+
+    // Read deployment data
+    let deployment_path = crate::core::utils::data_output::get_output_path();
+    let data_content = std::fs::read_to_string(&deployment_path)
+        .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    // Get governance canister ID
+    let governance_canister = deployment_data
+        .deployed_sns
+        .governance_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse governance canister ID from deployment data")?;
+
+    // Try to find principal in deployment data to load identity
+    let agent = if let Some(participant_data) = deployment_data
+        .participants
+        .iter()
+        .find(|p| p.principal == participant_principal.to_string())
+    {
+        // Load participant identity
+        let seed_path = PathBuf::from(&participant_data.seed_file);
+        let identity = load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with participant identity")?
+    } else {
+        // Try to load as dfx identity
+        use super::identity::load_dfx_identity;
+        let identity =
+            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with dfx identity")?
+    };
+
+    // Determine neuron subaccount
+    let neuron_subaccount = if let Some(id) = neuron_id {
+        id
+    } else {
+        // Get neurons and select the one with longest dissolve delay
+        let neurons =
+            list_neurons_for_principal(&agent, governance_canister, participant_principal)
+                .await
+                .context("Failed to list neurons")?;
+
+        neurons
+            .iter()
+            .rev()
+            .find(|n| {
+                matches!(
+                    n.dissolve_state,
+                    Some(DissolveState::DissolveDelaySeconds(_))
+                )
+            })
+            .and_then(|n| n.id.as_ref())
+            .or_else(|| neurons.last().and_then(|n| n.id.as_ref()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Participant has no neurons. Make sure you have created neurons.")
+            })?
+            .id
+            .clone()
+    };
+
+    // Increase dissolve delay
+    set_sns_dissolve_delay(
+        &agent,
+        governance_canister,
+        neuron_subaccount,
+        additional_dissolve_delay_seconds,
+    )
+    .await
+    .context("Failed to increase dissolve delay")?;
+
+    Ok(())
+}
+
+/// High-level function to start or stop dissolving for a participant's neuron
+/// This reads deployment data, loads the participant identity, and manages dissolving state
+pub async fn manage_dissolving_state_participant_neuron_default_path(
+    participant_principal: Principal,
+    start_dissolving: bool,
+    neuron_id: Option<Vec<u8>>,
+) -> Result<()> {
+    use super::identity::{create_agent, load_identity_from_seed_file};
+    use std::path::PathBuf;
+
+    // Read deployment data
+    let deployment_path = crate::core::utils::data_output::get_output_path();
+    let data_content = std::fs::read_to_string(&deployment_path)
+        .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
+    let deployment_data: crate::core::utils::data_output::SnsCreationData =
+        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+
+    // Get governance canister ID
+    let governance_canister = deployment_data
+        .deployed_sns
+        .governance_canister_id
+        .as_ref()
+        .and_then(|s| Principal::from_text(s).ok())
+        .context("Failed to parse governance canister ID from deployment data")?;
+
+    // Try to find principal in deployment data to load identity
+    let agent = if let Some(participant_data) = deployment_data
+        .participants
+        .iter()
+        .find(|p| p.principal == participant_principal.to_string())
+    {
+        // Load participant identity
+        let seed_path = PathBuf::from(&participant_data.seed_file);
+        let identity = load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with participant identity")?
+    } else {
+        // Try to load as dfx identity
+        use super::identity::load_dfx_identity;
+        let identity =
+            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
+        create_agent(identity)
+            .await
+            .context("Failed to create agent with dfx identity")?
+    };
+
+    // Determine neuron subaccount
+    let neuron_subaccount = if let Some(id) = neuron_id {
+        id
+    } else {
+        // Get neurons and select the one with longest dissolve delay (or first if none have delay)
+        let neurons =
+            list_neurons_for_principal(&agent, governance_canister, participant_principal)
+                .await
+                .context("Failed to list neurons")?;
+
+        neurons
+            .iter()
+            .rev()
+            .find(|n| {
+                matches!(
+                    n.dissolve_state,
+                    Some(DissolveState::DissolveDelaySeconds(_))
+                )
+            })
+            .and_then(|n| n.id.as_ref())
+            .or_else(|| neurons.last().and_then(|n| n.id.as_ref()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Participant has no neurons. Make sure you have created neurons.")
+            })?
+            .id
+            .clone()
+    };
+
+    // Start or stop dissolving
+    if start_dissolving {
+        start_dissolving_sns_neuron(&agent, governance_canister, neuron_subaccount)
+            .await
+            .context("Failed to start dissolving")?;
+    } else {
+        stop_dissolving_sns_neuron(&agent, governance_canister, neuron_subaccount)
+            .await
+            .context("Failed to stop dissolving")?;
+    }
+
+    Ok(())
 }
 
 /// Create an SNS neuron by checking balance, transferring tokens, and claiming

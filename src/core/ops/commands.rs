@@ -10,7 +10,10 @@ use crate::core::ops::governance_ops::{
 };
 use crate::core::ops::sns_governance_ops::{
     add_hotkey_to_participant_neuron_default_path, create_sns_neuron_default_path,
-    disburse_participant_neuron_default_path, list_neurons_for_principal_default_path,
+    disburse_participant_neuron_default_path,
+    increase_dissolve_delay_participant_neuron_default_path,
+    list_neurons_for_principal_default_path,
+    manage_dissolving_state_participant_neuron_default_path,
     mint_sns_tokens_with_all_votes_default_path,
 };
 use crate::core::ops::snsw_ops::check_sns_deployed_default_path;
@@ -369,14 +372,14 @@ pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
     println!();
 
     // Print table header
-    println!("{:-<90}", "");
+    println!("{:-<100}", "");
     println!(
-        "{:<20} {:<20} {:<20} {:<30}",
-        "Neuron ID", "Stake (e8s)", "Dissolve Delay", "Permissions"
+        "{:<5} {:<20} {:<20} {:<25} {:<30}",
+        "#", "Neuron ID", "Stake (e8s)", "Dissolve Delay", "Permissions"
     );
-    println!("{:-<90}", "");
+    println!("{:-<100}", "");
 
-    for neuron in &neurons {
+    for (index, neuron) in neurons.iter().enumerate() {
         // Neuron ID (hex) - use short format like e35f1b8...518559ea
         let neuron_id_display = if let Some(id) = &neuron.id {
             let hex_id = hex::encode(&id.id);
@@ -430,15 +433,208 @@ pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
         };
 
         println!(
-            "{:<20} {:<20} {:<20} {:<30}",
-            neuron_id_display, stake_str, dissolve_delay_display, perm_str
+            "{:<5} {:<20} {:<20} {:<25} {:<30}",
+            index + 1,
+            neuron_id_display,
+            stake_str,
+            dissolve_delay_display,
+            perm_str
         );
     }
 
-    println!("{:-<90}", "");
+    println!("{:-<100}", "");
     println!();
 
+    // Ask if user wants to see details for a specific neuron
+    if neurons.len() > 0 {
+        println!();
+        print!(
+            "Enter neuron number to see full details (1-{}) or press Enter to skip: ",
+            neurons.len()
+        );
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let selection = input.trim();
+
+        if !selection.is_empty() {
+            let selection_num: usize = selection
+                .parse()
+                .context("Invalid selection - must be a number")?;
+            if selection_num < 1 || selection_num > neurons.len() {
+                eprintln!(
+                    "Invalid selection. Please choose a number between 1 and {}",
+                    neurons.len()
+                );
+                return Ok(());
+            }
+
+            let selected_neuron = &neurons[selection_num - 1];
+            display_neuron_details(selected_neuron);
+        }
+    }
+
     Ok(())
+}
+
+/// Display full details for a single neuron
+fn display_neuron_details(neuron: &crate::core::declarations::sns_governance::Neuron) {
+    use crate::core::declarations::sns_governance::DissolveState;
+
+    print_header("Neuron Details");
+
+    // Neuron ID
+    if let Some(id) = &neuron.id {
+        let hex_id = hex::encode(&id.id);
+        print_info(&format!("Neuron ID: {}", hex_id));
+    } else {
+        print_info("Neuron ID: <none>");
+    }
+
+    // Stake information
+    println!();
+    print_info("Stake Information:");
+    println!("  Cached Stake: {} e8s", neuron.cached_neuron_stake_e8s);
+    if let Some(staked_maturity) = neuron.staked_maturity_e8s_equivalent {
+        println!("  Staked Maturity: {} e8s", staked_maturity);
+    }
+    println!("  Maturity: {} e8s", neuron.maturity_e8s_equivalent);
+
+    // Dissolve state
+    println!();
+    print_info("Dissolve State:");
+    match &neuron.dissolve_state {
+        Some(DissolveState::DissolveDelaySeconds(seconds)) => {
+            let days = *seconds / 86400;
+            let hours = (*seconds % 86400) / 3600;
+            println!("  Type: Dissolve Delay");
+            println!(
+                "  Delay: {} seconds ({} days, {} hours)",
+                seconds, days, hours
+            );
+        }
+        Some(DissolveState::WhenDissolvedTimestampSeconds(timestamp)) => {
+            println!("  Type: Dissolving");
+            println!("  Dissolves at timestamp: {}", timestamp);
+        }
+        None => {
+            println!("  Type: None");
+        }
+    }
+
+    // Aging
+    println!();
+    print_info("Aging:");
+    println!(
+        "  Aging since timestamp: {}",
+        neuron.aging_since_timestamp_seconds
+    );
+    println!("  Created timestamp: {}", neuron.created_timestamp_seconds);
+
+    // Voting power
+    println!();
+    print_info(&format!(
+        "Voting Power Multiplier: {}%",
+        neuron.voting_power_percentage_multiplier
+    ));
+
+    // Permissions
+    println!();
+    print_info("Permissions:");
+    if neuron.permissions.is_empty() {
+        println!("  None");
+    } else {
+        for perm in &neuron.permissions {
+            if let Some(principal) = &perm.principal {
+                println!("  Principal: {}", principal);
+                println!("    Permission Types: {:?}", perm.permission_type);
+            } else {
+                println!("  Unknown Principal:");
+                println!("    Permission Types: {:?}", perm.permission_type);
+            }
+        }
+    }
+
+    // Auto stake maturity
+    if let Some(auto_stake) = neuron.auto_stake_maturity {
+        println!();
+        print_info(&format!("Auto Stake Maturity: {}", auto_stake));
+    }
+
+    // Vesting
+    if let Some(vesting) = neuron.vesting_period_seconds {
+        println!();
+        print_info(&format!("Vesting Period: {} seconds", vesting));
+    }
+
+    // Disburse maturity in progress
+    if !neuron.disburse_maturity_in_progress.is_empty() {
+        println!();
+        print_info("Disburse Maturity In Progress:");
+        for disburse in &neuron.disburse_maturity_in_progress {
+            println!("  Amount: {} e8s", disburse.amount_e8s);
+            println!(
+                "  Timestamp: {}",
+                disburse.timestamp_of_disbursement_seconds
+            );
+            if let Some(account) = &disburse.account_to_disburse_to {
+                if let Some(owner) = &account.owner {
+                    println!("  Account Owner: {}", owner);
+                }
+            }
+        }
+    }
+
+    // Followees
+    if !neuron.followees.is_empty() {
+        println!();
+        print_info("Followees:");
+        for (function_id, followees) in &neuron.followees {
+            println!(
+                "  Function ID {}: {} followee(s)",
+                function_id,
+                followees.followees.len()
+            );
+        }
+    }
+
+    // Topic followees
+    if let Some(topic_followees) = &neuron.topic_followees {
+        if !topic_followees.topic_id_to_followees.is_empty() {
+            println!();
+            print_info("Topic Followees:");
+            for (topic_id, topic_data) in &topic_followees.topic_id_to_followees {
+                if let Some(topic) = &topic_data.topic {
+                    // Match on the Topic enum variant
+                    use crate::core::declarations::sns_governance::Topic;
+                    let topic_str = match topic {
+                        Topic::DappCanisterManagement => "DappCanisterManagement",
+                        Topic::DaoCommunitySettings => "DaoCommunitySettings",
+                        Topic::ApplicationBusinessLogic => "ApplicationBusinessLogic",
+                        Topic::CriticalDappOperations => "CriticalDappOperations",
+                        Topic::TreasuryAssetManagement => "TreasuryAssetManagement",
+                        Topic::Governance => "Governance",
+                        Topic::SnsFrameworkManagement => "SnsFrameworkManagement",
+                    };
+                    println!(
+                        "  Topic {} (ID {}): {} followee(s)",
+                        topic_str,
+                        topic_id,
+                        topic_data.followees.len()
+                    );
+                } else {
+                    println!(
+                        "  Topic ID {}: {} followee(s)",
+                        topic_id,
+                        topic_data.followees.len()
+                    );
+                }
+            }
+        }
+    }
+
+    println!();
 }
 
 /// Handle set-icp-visibility command
@@ -977,6 +1173,181 @@ fn print_add_hotkey_usage(program_name: &str) {
         program_name
     );
     eprintln!("  {} add-hotkey icp <hotkey_principal>", program_name);
+}
+
+/// Handle increase-sns-dissolve-delay command
+pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Step 1: Get participant principal (select if not provided)
+    let participant_principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse participant principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Step 2: Get neuron ID (select if not provided)
+    let neuron_id = if args.len() >= 4 {
+        let hex_str = args[3].strip_prefix("0x").unwrap_or(&args[3]);
+        Some(hex::decode(hex_str).context("Failed to decode neuron_id from hex")?)
+    } else {
+        // Interactive neuron selection
+        Some(select_neuron(participant_principal).await?)
+    };
+
+    // Step 3: Get additional dissolve delay (interactive if not provided)
+    let additional_dissolve_delay_seconds = if args.len() >= 5 {
+        args[4]
+            .parse::<u64>()
+            .context("Failed to parse additional_dissolve_delay_seconds")?
+    } else {
+        // Interactive prompt
+        print_header("Increase SNS Neuron Dissolve Delay");
+        print_info(&format!("Participant: {}", participant_principal));
+        if let Some(ref id) = neuron_id {
+            let hex_id = hex::encode(id);
+            if hex_id.len() >= 15 {
+                print_info(&format!(
+                    "Neuron ID: {}...{}",
+                    &hex_id[..7],
+                    &hex_id[hex_id.len() - 8..]
+                ));
+            } else {
+                print_info(&format!("Neuron ID: {}", hex_id));
+            }
+        }
+        println!();
+        print!("Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        input
+            .trim()
+            .parse::<u64>()
+            .context("Failed to parse dissolve delay - must be a number")?
+    };
+
+    print_header("Increasing Dissolve Delay");
+    print_info(&format!("Participant: {}", participant_principal));
+    if let Some(ref id) = neuron_id {
+        let hex_id = hex::encode(id);
+        if hex_id.len() >= 15 {
+            print_info(&format!(
+                "Neuron ID: {}...{}",
+                &hex_id[..7],
+                &hex_id[hex_id.len() - 8..]
+            ));
+        } else {
+            print_info(&format!("Neuron ID: {}", hex_id));
+        }
+    }
+    let days = additional_dissolve_delay_seconds / 86400;
+    let hours = (additional_dissolve_delay_seconds % 86400) / 3600;
+    print_info(&format!(
+        "Additional Delay: {} seconds ({} days, {} hours)",
+        additional_dissolve_delay_seconds, days, hours
+    ));
+
+    increase_dissolve_delay_participant_neuron_default_path(
+        participant_principal,
+        additional_dissolve_delay_seconds,
+        neuron_id,
+    )
+    .await
+    .context("Failed to increase dissolve delay")?;
+
+    print_success("Dissolve delay increased successfully!");
+    Ok(())
+}
+
+/// Handle manage-sns-dissolving command
+pub async fn handle_manage_sns_dissolving(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Step 1: Get participant principal (select if not provided)
+    let participant_principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse participant principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Step 2: Get action (start/stop) - interactive if not provided
+    let start_dissolving = if args.len() >= 4 {
+        match args[3].to_lowercase().as_str() {
+            "start" | "true" | "1" => true,
+            "stop" | "false" | "0" => false,
+            _ => {
+                anyhow::bail!("Invalid action. Use 'start' or 'stop'");
+            }
+        }
+    } else {
+        // Interactive prompt
+        print_header("Manage SNS Neuron Dissolving State");
+        print_info(&format!("Participant: {}", participant_principal));
+        println!();
+        println!("Actions:");
+        println!("  [1] Start Dissolving");
+        println!("  [2] Stop Dissolving");
+        println!();
+        print!("Select action (1 or 2): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let selection = input.trim().to_lowercase();
+
+        match selection.as_str() {
+            "1" | "start" => true,
+            "2" | "stop" => false,
+            _ => {
+                anyhow::bail!("Invalid selection. Use 1 to start or 2 to stop dissolving.");
+            }
+        }
+    };
+
+    // Step 3: Get neuron ID (select if not provided)
+    let neuron_id = if args.len() >= 5 {
+        let hex_str = args[4].strip_prefix("0x").unwrap_or(&args[4]);
+        Some(hex::decode(hex_str).context("Failed to decode neuron_id from hex")?)
+    } else {
+        // Interactive neuron selection
+        Some(select_neuron(participant_principal).await?)
+    };
+
+    print_header(if start_dissolving {
+        "Starting Dissolving"
+    } else {
+        "Stopping Dissolving"
+    });
+    print_info(&format!("Participant: {}", participant_principal));
+    if let Some(ref id) = neuron_id {
+        let hex_id = hex::encode(id);
+        if hex_id.len() >= 15 {
+            print_info(&format!(
+                "Neuron ID: {}...{}",
+                &hex_id[..7],
+                &hex_id[hex_id.len() - 8..]
+            ));
+        } else {
+            print_info(&format!("Neuron ID: {}", hex_id));
+        }
+    }
+
+    manage_dissolving_state_participant_neuron_default_path(
+        participant_principal,
+        start_dissolving,
+        neuron_id,
+    )
+    .await
+    .context("Failed to manage dissolving state")?;
+
+    print_success(if start_dissolving {
+        "Neuron is now dissolving!"
+    } else {
+        "Neuron dissolving stopped!"
+    });
+    Ok(())
 }
 
 /// Handle check-sns-deployed command
