@@ -44,11 +44,12 @@ local_sns/
 │   ├── build.sh                   # Build the local_sns binary
 │   ├── deploy_local_sns.sh        # Deploy a new SNS
 │   ├── add_sns_hotkey.sh          # Add hotkey to SNS neuron (interactive)
-│   ├── add_icp_hotkey.sh          # Add hotkey to ICP neuron
+│   ├── add_icp_hotkey.sh          # Add hotkey to ICP neuron (interactive)
 │   ├── get_sns_neurons.sh         # List SNS neurons (interactive)
-│   ├── get_icp_neuron.sh          # Get ICP neuron information
-│   ├── set_icp_visibility.sh      # Set ICP neuron visibility
-│   ├── disburse_neuron.sh         # Disburse tokens from SNS neuron (interactive)
+│   ├── get_icp_neuron.sh          # Get ICP neuron information (interactive)
+│   ├── set_icp_visibility.sh      # Set ICP neuron visibility (interactive)
+│   ├── create_sns_neuron.sh       # Create SNS neuron by staking tokens (interactive)
+│   ├── disburse_sns_neuron.sh     # Disburse tokens from SNS neuron (interactive)
 │   └── mint_sns_tokens.sh         # Mint SNS tokens via proposal (interactive)
 └── generated/             # Generated files (git-ignored)
     ├── sns_deployment_data.json
@@ -79,29 +80,36 @@ bash scripts/start.sh
 
 The menu provides easy access to all available operations:
 
-- **Deploy Local SNS** - Create a new SNS on your local dfx network
-- **Add SNS Neuron Hotkey** - Add a hotkey to an SNS participant neuron (interactive)
-- **Add ICP Neuron Hotkey** - Add a hotkey to the ICP neuron used for SNS deployment
-- **List SNS Neurons** - Query and display SNS neurons for a principal (interactive)
-- **Get ICP Neuron Info** - Get detailed information about the ICP neuron
-- **Set ICP Neuron Visibility** - Set the ICP neuron to public or private
-- **Disburse Neuron** - Disburse tokens from an SNS neuron to a receiver (interactive)
-- **Mint SNS Tokens** - Mint additional tokens by creating a proposal (interactive)
+- **1. Add SNS Neuron Hotkey** - Add a hotkey to an SNS participant neuron (interactive)
+- **2. Add ICP Neuron Hotkey** - Add a hotkey to the ICP neuron used for SNS deployment (interactive)
+- **3. List SNS Neurons** - Query and display SNS neurons for a principal (interactive)
+- **4. Get ICP Neuron Info** - Get detailed information about the ICP neuron (interactive)
+- **5. Set ICP Neuron Visibility** - Set the ICP neuron to public or private (interactive)
+- **6. Create SNS Neuron** - Create an SNS neuron by staking tokens from ledger balance (interactive)
+- **7. Disburse SNS Neuron** - Disburse tokens from an SNS neuron to a receiver (interactive)
+- **8. Mint SNS Tokens** - Mint additional tokens by creating a proposal (interactive)
+- **9. Deploy New SNS** - Create a new SNS instance (creates a separate SNS, does not replace existing)
+- **b. Rebuild Binary** - Rebuild the Rust binary (useful after code changes)
+- **0. Exit** - Exit the menu
+
+The menu will automatically check if an SNS is deployed. If not, it will prompt you to deploy one on first run.
 
 ### Using Bash Scripts Directly
 
-All scripts support interactive prompts for missing arguments:
+**All scripts are fully interactive** - run them without arguments and they will prompt for all required inputs. You can also provide arguments to skip prompts.
 
 ```bash
-# Deploy a local SNS
+# Deploy a local SNS (fully automated)
 bash scripts/deploy_local_sns.sh
 
-# Add a hotkey to an SNS neuron (interactive - prompts for participant, neuron, hotkey)
+# Add a hotkey to an SNS neuron (interactive - prompts for participant, neuron, hotkey, permissions)
 bash scripts/add_sns_hotkey.sh
 # Or with arguments:
-bash scripts/add_sns_hotkey.sh <participant_principal> <hotkey_principal>
+bash scripts/add_sns_hotkey.sh <participant_principal> <hotkey_principal> [permissions]
 
-# Add a hotkey to ICP neuron
+# Add a hotkey to ICP neuron (interactive - prompts for hotkey if not provided)
+bash scripts/add_icp_hotkey.sh
+# Or with argument:
 bash scripts/add_icp_hotkey.sh <hotkey_principal>
 
 # Query SNS neurons (interactive - shows participant menu if no principal provided)
@@ -109,42 +117,74 @@ bash scripts/get_sns_neurons.sh
 # Or with principal:
 bash scripts/get_sns_neurons.sh <principal>
 
-# Get ICP neuron information
-bash scripts/get_icp_neuron.sh [neuron_id]
+# Get ICP neuron information (interactive - uses deployment data or prompts for neuron ID)
+bash scripts/get_icp_neuron.sh
+# Or with neuron ID:
+bash scripts/get_icp_neuron.sh <neuron_id>
 
-# Set ICP neuron visibility
+# Set ICP neuron visibility (interactive - shows menu if not provided)
+bash scripts/set_icp_visibility.sh
+# Or with argument:
 bash scripts/set_icp_visibility.sh <true|false>
 
-# Disburse neuron tokens (interactive - prompts for participant, neuron, receiver)
-bash scripts/disburse_neuron.sh
+# Create SNS neuron (interactive - prompts for principal, amount, memo, dissolve delay)
+bash scripts/create_sns_neuron.sh
+# Or with arguments:
+bash scripts/create_sns_neuron.sh <principal> <amount_e8s> [memo] [dissolve_delay_seconds]
+
+# Disburse SNS neuron tokens (interactive - prompts for participant, neuron, receiver)
+bash scripts/disburse_sns_neuron.sh
+# Or with arguments:
+bash scripts/disburse_sns_neuron.sh <participant_principal> [neuron_id_hex|receiver_principal] [receiver_principal]
 
 # Mint SNS tokens (interactive - prompts for proposer, receiver, amount)
 bash scripts/mint_sns_tokens.sh
+# Or with arguments:
+bash scripts/mint_sns_tokens.sh <proposer_principal> <receiver_principal> <amount_e8s>
+
+# Build the binary
+bash scripts/build.sh
 ```
 
 ### Using Rust Binary Directly
 
+All commands support interactive prompts when arguments are omitted:
+
 ```bash
-# Build the binary
+# Build the binary (or use build.sh)
+bash scripts/build.sh
+# Or manually:
 cargo build --release --bin local_sns
 
-# Deploy SNS (no arguments = full deployment)
-cargo run --bin local_sns
+# Deploy SNS (fully automated)
+cargo run --bin local_sns -- deploy-sns
 
-# Add hotkey to SNS neuron
-cargo run --bin local_sns -- add-hotkey sns <participant_principal> <hotkey_principal> [permissions]
+# Add hotkey to SNS neuron (interactive)
+cargo run --bin local_sns -- add-hotkey sns [participant_principal] [neuron_id_hex|hotkey_principal] [hotkey_principal|permissions] [permissions]
 
-# Add hotkey to ICP neuron
-cargo run --bin local_sns -- add-hotkey icp <hotkey_principal>
+# Add hotkey to ICP neuron (interactive)
+cargo run --bin local_sns -- add-hotkey icp [hotkey_principal]
 
-# List SNS neurons for a principal
-cargo run --bin local_sns -- list-neurons <principal>
+# List SNS neurons (interactive - shows participant menu if no principal)
+cargo run --bin local_sns -- list-sns-neurons [principal]
 
-# Set ICP neuron visibility
-cargo run --bin local_sns -- set-icp-visibility <true|false>
+# Create SNS neuron (interactive)
+cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
 
-# Get ICP neuron information
+# Disburse SNS neuron (interactive)
+cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
+
+# Mint SNS tokens (interactive)
+cargo run --bin local_sns -- mint-sns-tokens [proposer_principal] [receiver_principal] [amount_e8s]
+
+# Set ICP neuron visibility (interactive - shows menu if not provided)
+cargo run --bin local_sns -- set-icp-visibility [true|false]
+
+# Get ICP neuron information (interactive)
 cargo run --bin local_sns -- get-icp-neuron [neuron_id]
+
+# Check if SNS is deployed
+cargo run --bin local_sns -- check-sns-deployed
 ```
 
 ## SNS Configuration
@@ -214,15 +254,20 @@ Add a hotkey to an SNS or ICP neuron.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- add-hotkey <sns|icp> <owner_principal> <hotkey_principal> [permissions]
+cargo run --bin local_sns -- add-hotkey <sns|icp> [owner_principal] [neuron_id_hex|hotkey_principal] [hotkey_principal|permissions] [permissions]
 ```
 
-**Arguments:**
+**Arguments (all optional - interactive prompts if omitted):**
 
-- `sns|icp`: Neuron type
-- `owner_principal`: For SNS, the participant principal. For ICP, ignored (uses default dfx identity)
-- `hotkey_principal`: Principal to add as hotkey
-- `permissions` (SNS only): Comma-separated permission types (default: `3,4`)
+- `sns|icp`: Neuron type (required)
+- **For SNS neurons:**
+  - `owner_principal`: Optional. Participant principal who owns the neuron. If not provided, shows participant selection menu
+  - `neuron_id_hex|hotkey_principal`: Optional. Either neuron ID in hex format or hotkey principal. If not provided, shows neuron selection menu
+  - `hotkey_principal`: Optional. Principal to add as hotkey. Prompts if not provided
+  - `permissions`: Optional. Comma-separated permission types (default: `3,4` = SubmitProposal + Vote)
+- **For ICP neurons:**
+  - `hotkey_principal`: Optional. Principal to add as hotkey. Prompts if not provided
+  - Note: ICP neurons don't use permission types - hotkeys have full control like the owner
 
 ### `list-sns-neurons`
 
@@ -231,8 +276,14 @@ List all SNS neurons owned by a principal.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- list-sns-neurons <principal>
+cargo run --bin local_sns -- list-sns-neurons [principal]
 ```
+
+**Arguments:**
+
+- `principal`: Optional. Principal to query neurons for. If not provided, shows participant selection menu.
+
+The output displays a formatted table showing neuron ID, stake, dissolve delay, and permissions.
 
 ### `create-sns-neuron`
 
@@ -241,21 +292,24 @@ Create an SNS neuron by staking tokens from the SNS ledger balance.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo]
+cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
 ```
 
-**Arguments:**
+**Arguments (all optional - interactive prompts if omitted):**
 
 - `principal`: Optional. Principal to create the neuron for. If not provided, shows participant selection menu.
-- `amount_e8s`: Optional. Amount of tokens to stake in e8s. If not provided, stakes all available balance.
-- `memo`: Optional. Memo to use for neuron creation (default: 1).
+- `amount_e8s`: Optional. Amount of tokens to stake in e8s. If not provided, stakes all available balance (after deducting transfer fee).
+- `memo`: Optional. Memo to use for neuron creation. If not provided, auto-generated based on neuron count (neuron_count + 1).
+- `dissolve_delay_seconds`: Optional. Dissolve delay in seconds. If not provided or 0, no dissolve delay is set.
 
 The command will:
 
 1. Check the SNS ledger balance for the principal
-2. Verify the balance meets the minimum stake requirement (0.1 tokens = 10,000,000 e8s)
-3. Transfer tokens to the governance canister subaccount
-4. Claim the neuron
+2. Display available balance, transfer fee, and minimum stake requirement
+3. Verify the balance meets the minimum stake requirement (fetched from governance canister)
+4. Transfer tokens to the governance canister subaccount
+5. Claim the neuron
+6. Optionally set dissolve delay if specified
 
 ### `disburse-sns-neuron`
 
@@ -267,11 +321,29 @@ Disburse tokens from an SNS neuron to a receiver principal.
 cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
 ```
 
-**Arguments:**
+**Arguments (all optional - interactive prompts if omitted):**
 
-- `participant_principal`: Optional. Principal of the participant who owns the neuron.
-- `neuron_id_hex`: Optional. Neuron ID in hex format.
-- `receiver_principal`: Optional. Principal to receive the disbursed tokens.
+- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `neuron_id_hex`: Optional. Neuron ID in hex format. If not provided and receiver is not provided, shows neuron selection menu.
+- `receiver_principal`: Optional. Principal to receive the disbursed tokens. Prompts if not provided.
+
+The command disburses the full neuron stake to the receiver.
+
+### `mint-sns-tokens`
+
+Create a governance proposal to mint tokens and get all neurons to vote on it.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- mint-sns-tokens [proposer_principal] [receiver_principal] [amount_e8s]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `proposer_principal`: Optional. Principal of the participant who will create the proposal. If not provided, shows participant selection menu.
+- `receiver_principal`: Optional. Principal to receive the minted tokens. Prompts if not provided.
+- `amount_e8s`: Optional. Amount of tokens to mint in e8s. Prompts if not provided.
 
 ### `set-icp-visibility`
 
@@ -280,8 +352,16 @@ Set the visibility of the ICP neuron (public/private).
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- set-icp-visibility <true|false>
+cargo run --bin local_sns -- set-icp-visibility [true|false]
 ```
+
+**Arguments:**
+
+- `true|false`: Optional. Visibility setting. If not provided, shows interactive menu:
+  - `[1] Public (visible to everyone)`
+  - `[2] Private (only visible to controller)` (default)
+
+Uses the ICP neuron from SNS deployment data.
 
 ### `get-icp-neuron`
 
@@ -293,7 +373,13 @@ Get full information about an ICP neuron.
 cargo run --bin local_sns -- get-icp-neuron [neuron_id]
 ```
 
-If `neuron_id` is not provided, uses the neuron ID from deployment data.
+**Arguments:**
+
+- `neuron_id`: Optional. Specific neuron ID to query. If not provided:
+  - Uses neuron ID from deployment data if available
+  - Otherwise prompts for neuron ID
+
+Returns full neuron information as JSON.
 
 ## Canister IDs
 
@@ -311,7 +397,7 @@ Uses standard NNS canister IDs for local development:
 
 ## Building
 
-The binary is automatically built when you run `start.sh`. You can also build it manually:
+The binary is automatically built when you run `start.sh` for the first time (if it doesn't exist). You can also build it manually:
 
 ```bash
 # Build using the build script (tries release, falls back to dev)
@@ -322,7 +408,7 @@ cargo build --bin local_sns              # Debug build
 cargo build --release --bin local_sns    # Release build
 ```
 
-> **Note**: Individual scripts no longer rebuild the binary. The binary is built once when you start the menu, or you can run `build.sh` manually before running individual scripts.
+> **Note**: Individual scripts no longer rebuild the binary. The binary is built automatically on first run via `start.sh`, or you can run `build.sh` manually before running individual scripts. The menu also provides a "Rebuild Binary" option for rebuilding after code changes.
 
 ## Testing
 
@@ -341,20 +427,52 @@ bash scripts/deploy_local_sns.sh
 
 ## Available Scripts
 
-All scripts are located in the `scripts/` directory:
+All scripts are located in the `scripts/` directory. **All operation scripts are fully interactive** - run them without arguments and they will guide you through the process:
 
 - **`start.sh`** - Interactive menu for all operations (recommended entry point)
-- **`deploy_local_sns.sh`** - Full SNS deployment workflow
-- **`add_sns_hotkey.sh`** - Add hotkey to SNS neuron (interactive participant/neuron selection)
-- **`add_icp_hotkey.sh`** - Add hotkey to ICP neuron
-- **`get_sns_neurons.sh`** - List all SNS neurons for a principal (interactive participant selection)
-- **`get_icp_neuron.sh`** - Get detailed ICP neuron information
-- **`set_icp_visibility.sh`** - Set ICP neuron visibility (public/private)
-- **`create_sns_neuron.sh`** - Create an SNS neuron by staking tokens from ledger balance
-- **`disburse_sns_neuron.sh`** - Disburse tokens from SNS neuron (interactive selection)
-- **`mint_sns_tokens.sh`** - Mint tokens via governance proposal (interactive prompts)
 
-Most scripts provide interactive prompts when arguments are omitted, making them easy to use without remembering exact command syntax.
+  - Automatically checks for SNS deployment
+  - Prompts to deploy if no SNS found
+  - Provides menu-driven access to all operations
+
+- **`build.sh`** - Build the local_sns Rust binary (tries release, falls back to dev)
+
+- **`deploy_local_sns.sh`** - Full SNS deployment workflow (fully automated)
+
+- **`add_sns_hotkey.sh`** - Add hotkey to SNS neuron (interactive)
+
+  - Prompts for participant, neuron, hotkey, and permissions if not provided
+
+- **`add_icp_hotkey.sh`** - Add hotkey to ICP neuron (interactive)
+
+  - Prompts for hotkey principal if not provided
+
+- **`get_sns_neurons.sh`** - List all SNS neurons for a principal (interactive)
+
+  - Shows participant selection menu if principal not provided
+
+- **`get_icp_neuron.sh`** - Get detailed ICP neuron information (interactive)
+
+  - Uses deployment data or prompts for neuron ID
+
+- **`set_icp_visibility.sh`** - Set ICP neuron visibility (interactive)
+
+  - Shows menu (public/private) if not provided
+
+- **`create_sns_neuron.sh`** - Create an SNS neuron by staking tokens (interactive)
+
+  - Prompts for principal, amount, memo, and dissolve delay
+  - Displays available balance, transfer fee, and minimum stake
+  - Auto-generates memo based on neuron count
+
+- **`disburse_sns_neuron.sh`** - Disburse tokens from SNS neuron (interactive)
+
+  - Prompts for participant, neuron, and receiver if not provided
+
+- **`mint_sns_tokens.sh`** - Mint tokens via governance proposal (interactive)
+  - Prompts for proposer, receiver, and amount if not provided
+
+All scripts can be run with arguments to skip prompts, or without arguments for full interactivity.
 
 ## Copying to Another Repository
 

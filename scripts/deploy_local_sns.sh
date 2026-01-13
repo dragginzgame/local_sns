@@ -66,7 +66,7 @@ echo ""
 
 cargo run --bin local_sns -- deploy-sns
 
-DEPLOYMENT_DATA="generated/sns_deployment_data.json"
+DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"
 
 if [ -f "$DEPLOYMENT_DATA" ]; then
     print_header "Deployment Complete"

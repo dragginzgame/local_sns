@@ -60,31 +60,26 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Fetching SNS Neurons"
-
-if [ -n "$PRINCIPAL" ]; then
-    print_info "Principal: $PRINCIPAL"
-else
-    print_info "No principal specified - will show participant selection"
-fi
-
-DEPLOYMENT_DATA="generated/sns_deployment_data.json"
-
-# Check if deployment data exists
-if [ ! -f "$DEPLOYMENT_DATA" ]; then
-    print_error "Deployment data not found at: $DEPLOYMENT_DATA"
-    print_info "Please run deploy_local_sns.sh first to create an SNS"
-    exit 1
-fi
-
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
     print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
     exit 1
 fi
 
-# Use the Rust binary's list-sns-neurons command
-print_header "Querying SNS Governance via Rust Binary"
+# Check if deployment data exists
+DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"
+if [ ! -f "$DEPLOYMENT_DATA" ]; then
+    print_error "Deployment data not found at: $DEPLOYMENT_DATA"
+    print_info "Please deploy an SNS first (option 9 in menu, or run deploy_local_sns.sh)"
+    exit 1
+fi
+
+print_header "List SNS Neurons"
+if [ -n "$PRINCIPAL" ]; then
+    print_info "Principal: $PRINCIPAL"
+else
+    print_info "No principal specified - will show participant selection"
+fi
 
 if [ -n "$PRINCIPAL" ]; then
     cargo run --bin local_sns -- list-sns-neurons "$PRINCIPAL"

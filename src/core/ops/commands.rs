@@ -270,17 +270,23 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
             Ok(())
         }
         "icp" => {
-            if args.len() < 4 {
-                eprintln!("Error: For ICP neurons, hotkey_principal is required");
-                eprintln!("Usage: {} add-hotkey icp <hotkey_principal>", args[0]);
-                std::process::exit(1);
-            }
-            let hotkey_principal =
-                Principal::from_text(&args[3]).context("Failed to parse hotkey principal")?;
+            // Step 1: Get hotkey principal (interactive if not provided)
+            let hotkey_principal = if args.len() >= 4 {
+                Principal::from_text(&args[3]).context("Failed to parse hotkey principal")?
+            } else {
+                print_header("Add Hotkey to ICP Neuron");
+                print_info("Using ICP neuron from SNS deployment data");
+                print!("Enter hotkey principal: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Principal::from_text(input.trim()).context("Failed to parse hotkey principal")?
+            };
 
             print_header("Adding Hotkey to ICP Neuron");
             print_info(&format!("Hotkey: {}", hotkey_principal));
             print_info("Using ICP neuron from SNS deployment data");
+            print_info("Note: ICP neurons don't use permission types - hotkeys have full control");
 
             add_hotkey_to_icp_neuron_default_path(hotkey_principal)
                 .await
@@ -437,35 +443,52 @@ pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
 
 /// Handle set-icp-visibility command
 pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
-    if args.len() < 3 {
-        eprintln!("Usage: {} set-icp-visibility <true|false>", args[0]);
-        eprintln!("\nArguments:");
-        eprintln!("  true  - Set neuron to public (visible to everyone)");
-        eprintln!("  false - Set neuron to private (only visible to controller)");
-        eprintln!("\nNote: Uses ICP neuron from SNS deployment data");
-        eprintln!("\nExample:");
-        eprintln!("  {} set-icp-visibility true", args[0]);
-        eprintln!("  {} set-icp-visibility false", args[0]);
-        std::process::exit(1);
-    }
+    use std::io::{self, Write};
 
-    let visibility_str = &args[2].to_lowercase();
-    let is_public = match visibility_str.as_str() {
-        "true" | "1" | "yes" => true,
-        "false" | "0" | "no" => false,
-        _ => {
-            eprintln!("Error: Invalid visibility value: {}", args[2]);
-            eprintln!("Use 'true' or 'false'");
-            std::process::exit(1);
+    // Get visibility (interactive if not provided)
+    let is_public = if args.len() >= 3 {
+        let visibility_str = &args[2].to_lowercase();
+        match visibility_str.as_str() {
+            "true" | "1" | "yes" => true,
+            "false" | "0" | "no" => false,
+            _ => {
+                eprintln!("Error: Invalid visibility value: {}", args[2]);
+                eprintln!("Use 'true' or 'false'");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // Interactive prompt
+        print_header("Set ICP Neuron Visibility");
+        print_info("Using ICP neuron from SNS deployment data");
+        println!();
+        println!("Visibility options:");
+        println!("  [1] Public (visible to everyone)");
+        println!("  [2] Private (only visible to controller)");
+        println!();
+        print!("Select option (1 or 2, default: 2): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim().to_lowercase();
+
+        match input.as_str() {
+            "1" | "public" | "true" | "yes" => true,
+            "2" | "private" | "false" | "no" | "" => false,
+            _ => {
+                anyhow::bail!("Invalid selection. Use 1 for public or 2 for private.");
+            }
         }
     };
 
     print_header("Setting ICP Neuron Visibility");
     print_info(&format!(
-        "Visibility: {} (value: {}) (from deployment data)",
+        "Visibility: {} (value: {})",
         if is_public { "Public" } else { "Private" },
         if is_public { 2 } else { 1 }
     ));
+    print_info("Using ICP neuron from SNS deployment data");
 
     set_icp_neuron_visibility_default_path(is_public)
         .await
@@ -477,6 +500,9 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
 
 /// Handle get-icp-neuron command
 pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Get neuron ID (interactive if not provided)
     let neuron_id = if args.len() > 2 {
         Some(
             args[2]
@@ -484,14 +510,65 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
                 .context("Failed to parse neuron ID")?,
         )
     } else {
-        None
+        // Try to get from deployment data, or prompt
+        let deployment_path = crate::core::utils::data_output::get_output_path();
+        if deployment_path.exists() {
+            let data_content = std::fs::read_to_string(&deployment_path)
+                .context("Failed to read deployment data")?;
+            let deployment_data: crate::core::utils::data_output::SnsCreationData =
+                serde_json::from_str(&data_content)
+                    .context("Failed to parse deployment data JSON")?;
+
+            if deployment_data.icp_neuron_id > 0 {
+                None // Will use from deployment data
+            } else {
+                // No neuron ID in deployment data, prompt for it
+                print_header("Get ICP Neuron Information");
+                print_info("No neuron ID found in deployment data");
+                print!("Enter neuron ID (or press Enter to exit): ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input = input.trim();
+                if input.is_empty() {
+                    anyhow::bail!("No neuron ID provided");
+                }
+                Some(
+                    input
+                        .parse::<u64>()
+                        .context("Failed to parse neuron ID - must be a number")?,
+                )
+            }
+        } else {
+            // No deployment data, must provide neuron ID
+            print_header("Get ICP Neuron Information");
+            print_info("No deployment data found");
+            print!("Enter neuron ID: ");
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            Some(
+                input
+                    .trim()
+                    .parse::<u64>()
+                    .context("Failed to parse neuron ID - must be a number")?,
+            )
+        }
     };
 
     print_header("Getting ICP Neuron Information");
     if let Some(id) = neuron_id {
-        print_info(&format!("Neuron ID: {}", id));
+        print_info(&format!("Neuron ID: {} (specified)", id));
     } else {
-        print_info("Using neuron ID from deployment data");
+        let deployment_path = crate::core::utils::data_output::get_output_path();
+        let data_content =
+            std::fs::read_to_string(&deployment_path).context("Failed to read deployment data")?;
+        let deployment_data: crate::core::utils::data_output::SnsCreationData =
+            serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
+        print_info(&format!(
+            "Neuron ID: {} (from deployment data)",
+            deployment_data.icp_neuron_id
+        ));
     }
 
     let neuron = get_icp_neuron_default_path(neuron_id)
@@ -501,6 +578,7 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
     // Output full response as JSON
     let json =
         serde_json::to_string_pretty(&neuron).context("Failed to serialize neuron to JSON")?;
+    println!();
     println!("{}", json);
 
     Ok(())
@@ -681,6 +759,32 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
         None
     };
 
+    // Step 4: Get optional dissolve delay (interactive if not provided)
+    let dissolve_delay_seconds = if args.len() >= 6 {
+        let delay = args[5]
+            .parse::<u64>()
+            .context("Failed to parse dissolve_delay_seconds")?;
+        if delay > 0 { Some(delay) } else { None }
+    } else {
+        // Interactive prompt for dissolve delay
+        println!();
+        print!("Enter dissolve delay in seconds (or press Enter to skip, default: 0): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            None // No dissolve delay
+        } else {
+            let delay: u64 = input
+                .parse()
+                .context("Failed to parse dissolve delay - must be a number")?;
+            if delay > 0 { Some(delay) } else { None }
+        }
+    };
+
     // Get existing neuron count to show what memo will be used
     let existing_neurons = list_neurons_for_principal_default_path(principal)
         .await
@@ -702,19 +806,30 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
         } else {
             print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
         }
+        if let Some(delay) = dissolve_delay_seconds {
+            print_info(&format!("Dissolve delay: {} seconds", delay));
+        } else {
+            print_info("Dissolve delay: 0 seconds (none)");
+        }
     } else {
-        // Amount was entered interactively, show memo info
+        // Amount was entered interactively, show memo and dissolve delay info
         print_info(&format!("Existing neurons: {}", neuron_count));
         if let Some(m) = memo {
             print_info(&format!("Memo: {} (specified)", m));
         } else {
             print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
         }
+        if let Some(delay) = dissolve_delay_seconds {
+            print_info(&format!("Dissolve delay: {} seconds", delay));
+        } else {
+            print_info("Dissolve delay: 0 seconds (none)");
+        }
     }
 
-    let neuron_id = create_sns_neuron_default_path(principal, amount_e8s, memo)
-        .await
-        .context("Failed to create SNS neuron")?;
+    let neuron_id =
+        create_sns_neuron_default_path(principal, amount_e8s, memo, dissolve_delay_seconds)
+            .await
+            .context("Failed to create SNS neuron")?;
 
     let hex_id = hex::encode(&neuron_id);
     print_success(&format!(
@@ -845,9 +960,11 @@ fn print_add_hotkey_usage(program_name: &str) {
     eprintln!("  3. Enter hotkey principal (if not provided as argument)");
     eprintln!("\nFor ICP neurons:");
     eprintln!(
-        "  Usage: {} add-hotkey icp <hotkey_principal>",
+        "  Usage: {} add-hotkey icp [hotkey_principal]",
         program_name
     );
+    eprintln!("  hotkey_principal - Optional: Principal to add as a hotkey");
+    eprintln!("                     If not provided, prompts interactively");
     eprintln!("  Uses ICP neuron from SNS deployment data");
     eprintln!("  permissions    - Not applicable (ICP neurons don't use permission types)");
     eprintln!("\nExamples:");

@@ -124,7 +124,7 @@ run_script() {
         if ! check_sns_deployed; then
             print_error "No SNS deployment found on the network!"
             echo ""
-            print_info "Please deploy an SNS first using option 1 (Deploy Local SNS)."
+            print_info "Please deploy an SNS first using option 9 (Deploy New SNS)."
             print_info "Configuration can be modified in src/init/sns_config.rs"
             echo ""
             return 1

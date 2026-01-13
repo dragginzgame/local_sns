@@ -2,25 +2,28 @@
 # Script to create an SNS neuron by staking tokens from the SNS ledger
 #
 # Usage:
-#   bash scripts/create_sns_neuron.sh [principal] [amount_e8s] [memo]
+#   bash scripts/create_sns_neuron.sh [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
 #
 # Arguments (all optional - interactive prompts if not provided):
-#   principal   - Optional: Principal to create the neuron for
-#                If not provided, shows participant selection menu
-#   amount_e8s  - Optional: Amount of tokens to stake in e8s
-#                If not provided, stakes all available balance
-#   memo        - Optional: Memo to use for neuron creation (default: 1)
+#   principal              - Optional: Principal to create the neuron for
+#                           If not provided, shows participant selection menu
+#   amount_e8s             - Optional: Amount of tokens to stake in e8s
+#                           If not provided, stakes all available balance
+#   memo                   - Optional: Memo to use for neuron creation (auto-generated if not provided)
+#   dissolve_delay_seconds - Optional: Dissolve delay in seconds (default: 0, i.e., no delay)
 #
 # Interactive flow:
 #   1. Select participant/principal (if not provided)
 #   2. Enter amount (if not provided, uses all available balance)
-#   3. Enter memo (if not provided, uses default: 1)
+#   3. Enter memo (if not provided, auto-generated based on neuron count)
+#   4. Enter dissolve delay in seconds (if not provided, defaults to 0)
 #
 # Example:
 #   bash scripts/create_sns_neuron.sh
 #   bash scripts/create_sns_neuron.sh 2laou-ygqmf-...
 #   bash scripts/create_sns_neuron.sh 2laou-ygqmf-... 10000000000
 #   bash scripts/create_sns_neuron.sh 2laou-ygqmf-... 10000000000 1
+#   bash scripts/create_sns_neuron.sh 2laou-ygqmf-... 10000000000 1 2592000  # 30 days
 
 set -euo pipefail
 
@@ -62,10 +65,6 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Create SNS Neuron"
-
-# All arguments are optional - Rust code handles interactive flow
-
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
     print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
@@ -73,16 +72,14 @@ if ! dfx ping >/dev/null 2>&1; then
 fi
 
 # Check if deployment data exists
-DEPLOYMENT_DATA="generated/sns_deployment_data.json"
+DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"
 if [ ! -f "$DEPLOYMENT_DATA" ]; then
     print_error "Deployment data file not found: $DEPLOYMENT_DATA"
-    print_info "Please run deploy_local_sns.sh first to create an SNS"
+    print_info "Please deploy an SNS first (option 9 in menu, or run deploy_local_sns.sh)"
     exit 1
 fi
 
-# Create neuron - Rust code will handle interactive flow
-print_header "Creating SNS Neuron"
-echo ""
+print_header "Create SNS Neuron"
 
 # Build command arguments - pass through whatever was provided
 CMD_ARGS=("create-sns-neuron")
@@ -92,6 +89,4 @@ for arg in "$@"; do
 done
 
 cargo run --bin local_sns -- "${CMD_ARGS[@]}"
-
-print_success "SNS neuron created successfully!"
 

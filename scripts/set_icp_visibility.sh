@@ -3,16 +3,22 @@
 # This is a wrapper around the Rust binary's set-icp-visibility command
 #
 # Usage:
-#   bash scripts/set_icp_visibility.sh <true|false>
+#   bash scripts/set_icp_visibility.sh [true|false]
 #
-# Arguments:
-#   true  - Set neuron to public (visible to everyone)
-#   false - Set neuron to private (only visible to controller)
+# Arguments (all optional - interactive prompts if not provided):
+#   true|false - Optional: Visibility setting
+#               true  - Set neuron to public (visible to everyone)
+#               false - Set neuron to private (only visible to controller)
+#               If not provided, shows interactive menu
+#
+# Interactive flow:
+#   1. Select visibility option (if not provided)
 #
 # Note: Uses the ICP neuron from the SNS deployment data
 #       (the neuron that was used to create the SNS proposal)
 #
 # Example:
+#   bash scripts/set_icp_visibility.sh
 #   bash scripts/set_icp_visibility.sh true
 #   bash scripts/set_icp_visibility.sh false
 
@@ -49,24 +55,7 @@ print_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
-# Check arguments
-if [ $# -lt 1 ]; then
-    echo ""
-    echo "Usage: $0 <true|false>"
-    echo ""
-    echo "Arguments:"
-    echo "  true  - Set neuron to public (visible to everyone)"
-    echo "  false - Set neuron to private (only visible to controller)"
-    echo ""
-    echo "Note: Uses the ICP neuron from the SNS deployment data"
-    echo ""
-    echo "Example:"
-    echo "  $0 true"
-    echo "  $0 false"
-    exit 1
-fi
-
-VISIBILITY="$1"
+# All arguments are optional - Rust code handles interactive flow
 
 # Get script directory (should be in local_sns/scripts/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,41 +64,27 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Set ICP Neuron Visibility"
-
-print_info "Visibility: $VISIBILITY"
-
-DEPLOYMENT_DATA="generated/sns_deployment_data.json"
-
-# Check if deployment data exists
-if [ ! -f "$DEPLOYMENT_DATA" ]; then
-    print_error "Deployment data not found at: $DEPLOYMENT_DATA"
-    print_info "Please run deploy_local_sns.sh first to create an SNS"
-    exit 1
-fi
-
-# Extract ICP neuron ID from deployment data (optional, just for info)
-if command -v jq &> /dev/null; then
-    ICP_NEURON_ID=$(jq -r '.icp_neuron_id // empty' "$DEPLOYMENT_DATA" 2>/dev/null)
-    if [ -n "$ICP_NEURON_ID" ] && [ "$ICP_NEURON_ID" != "null" ]; then
-        print_info "ICP Neuron ID (from deployment data): $ICP_NEURON_ID"
-    fi
-fi
-
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
     print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
     exit 1
 fi
 
-# Use the Rust binary's set-icp-visibility command
-print_header "Setting Visibility via Rust Binary"
-
-cargo run --bin local_sns -- set-icp-visibility "$VISIBILITY"
-
-if [ $? -eq 0 ]; then
-    print_success "Visibility updated successfully!"
-else
-    print_error "Failed to update visibility"
+# Check if deployment data exists
+DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"
+if [ ! -f "$DEPLOYMENT_DATA" ]; then
+    print_error "Deployment data not found at: $DEPLOYMENT_DATA"
+    print_info "Please deploy an SNS first (option 9 in menu, or run deploy_local_sns.sh)"
     exit 1
 fi
+
+print_header "Set ICP Neuron Visibility"
+
+# Build command arguments - pass through whatever was provided
+CMD_ARGS=("set-icp-visibility")
+# Pass all provided arguments through - Rust code will handle interactive prompts for missing ones
+for arg in "$@"; do
+    CMD_ARGS+=("$arg")
+done
+
+cargo run --bin local_sns -- "${CMD_ARGS[@]}"

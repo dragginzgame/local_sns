@@ -7,10 +7,11 @@ use std::path::PathBuf;
 
 #[allow(unused_imports)]
 use super::super::declarations::sns_governance::{
-    Account, Action, AddNeuronPermissions, By, ClaimOrRefresh, Command, Command1, Disburse,
-    DissolveState, GetProposal, Governance, ListNeurons, ListNeuronsResponse, ManageNeuron,
-    ManageNeuronResponse, MemoAndController, MintSnsTokens, NervousSystemParameters, Neuron,
-    NeuronId, NeuronPermissionList, Proposal, ProposalId, RegisterVote,
+    Account, Action, AddNeuronPermissions, By, ClaimOrRefresh, Command, Command1, Configure,
+    Disburse, DissolveState, GetProposal, Governance, IncreaseDissolveDelay, ListNeurons,
+    ListNeuronsResponse, ManageNeuron, ManageNeuronResponse, MemoAndController, MintSnsTokens,
+    NervousSystemParameters, Neuron, NeuronId, NeuronPermissionList, Operation, Proposal,
+    ProposalId, RegisterVote,
 };
 use super::ledger_ops::{
     generate_subaccount_by_nonce, get_sns_ledger_balance, get_sns_ledger_fee, transfer_sns_tokens,
@@ -781,15 +782,65 @@ pub async fn claim_sns_neuron(
     }
 }
 
+/// Set dissolve delay for an SNS neuron
+pub async fn set_sns_dissolve_delay(
+    agent: &Agent,
+    governance_canister: Principal,
+    neuron_subaccount: Vec<u8>,
+    dissolve_delay_seconds: u64,
+) -> Result<()> {
+    let command = Command::Configure(Configure {
+        operation: Some(Operation::IncreaseDissolveDelay(IncreaseDissolveDelay {
+            additional_dissolve_delay_seconds: dissolve_delay_seconds as u32,
+        })),
+    });
+
+    let request = ManageNeuron {
+        subaccount: neuron_subaccount,
+        command: Some(command),
+    };
+    let args = encode_args((request,))?;
+
+    let response = agent
+        .update(&governance_canister, "manage_neuron")
+        .with_arg(args)
+        .call_and_wait()
+        .await
+        .context("Failed to call manage_neuron to set dissolve delay")?;
+
+    let result: ManageNeuronResponse = Decode!(&response, ManageNeuronResponse)
+        .context("Failed to decode manage_neuron response")?;
+
+    match result.command {
+        Some(Command1::Configure {}) => Ok(()),
+        Some(Command1::Error(e)) => {
+            anyhow::bail!(
+                "Failed to set dissolve delay: {} (type: {})",
+                e.error_message,
+                e.error_type
+            );
+        }
+        _ => anyhow::bail!("Unexpected response from manage_neuron"),
+    }
+}
+
 /// Create an SNS neuron by checking balance, transferring tokens, and claiming
 /// Returns the neuron subaccount (ID) if successful
 pub async fn create_sns_neuron_default_path(
     principal: Principal,
     amount_e8s: Option<u64>,
     memo: Option<u64>,
+    dissolve_delay_seconds: Option<u64>,
 ) -> Result<Vec<u8>> {
     let deployment_path = crate::core::utils::data_output::get_output_path();
-    create_sns_neuron(&deployment_path, principal, amount_e8s, memo).await
+    create_sns_neuron(
+        &deployment_path,
+        principal,
+        amount_e8s,
+        memo,
+        dissolve_delay_seconds,
+    )
+    .await
 }
 
 /// Create an SNS neuron by checking balance, transferring tokens, and claiming
@@ -799,6 +850,7 @@ pub async fn create_sns_neuron(
     principal: Principal,
     amount_e8s: Option<u64>,
     memo: Option<u64>,
+    dissolve_delay_seconds: Option<u64>,
 ) -> Result<Vec<u8>> {
     use super::identity::{create_agent, load_identity_from_seed_file};
 
@@ -932,6 +984,26 @@ pub async fn create_sns_neuron(
     let neuron_id = claim_sns_neuron(&agent, governance_canister, memo_value, principal)
         .await
         .context("Failed to claim SNS neuron")?;
+
+    // Set dissolve delay if specified
+    if let Some(dissolve_delay) = dissolve_delay_seconds {
+        if dissolve_delay > 0 {
+            use crate::core::utils::{print_step, print_success};
+            print_step(&format!(
+                "Setting dissolve delay to {} seconds...",
+                dissolve_delay
+            ));
+            set_sns_dissolve_delay(
+                &agent,
+                governance_canister,
+                neuron_id.clone(),
+                dissolve_delay,
+            )
+            .await
+            .context("Failed to set dissolve delay")?;
+            print_success("Dissolve delay set");
+        }
+    }
 
     Ok(neuron_id)
 }

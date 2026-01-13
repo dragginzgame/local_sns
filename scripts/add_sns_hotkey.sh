@@ -65,8 +65,6 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Add SNS Neuron Hotkey"
-
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
     print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
@@ -74,16 +72,14 @@ if ! dfx ping >/dev/null 2>&1; then
 fi
 
 # Check if deployment data exists
-DEPLOYMENT_DATA="generated/sns_deployment_data.json"
+DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"
 if [ ! -f "$DEPLOYMENT_DATA" ]; then
     print_error "Deployment data file not found: $DEPLOYMENT_DATA"
-    print_info "Please run deploy_local_sns.sh first to create an SNS"
+    print_info "Please deploy an SNS first (option 9 in menu, or run deploy_local_sns.sh)"
     exit 1
 fi
 
-# Add hotkey - Rust code will handle interactive flow
-print_header "Adding Hotkey"
-echo ""
+print_header "Add SNS Neuron Hotkey"
 
 # Build command arguments - pass through whatever was provided
 CMD_ARGS=("add-hotkey" "sns")
@@ -93,5 +89,3 @@ for arg in "$@"; do
 done
 
 cargo run --bin local_sns -- "${CMD_ARGS[@]}"
-
-print_success "Hotkey added successfully!"

@@ -55,56 +55,22 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-print_header "Fetching ICP Neuron Information"
-
-# Determine neuron ID
-if [ $# -ge 1 ]; then
-    NEURON_ID="$1"
-    print_info "Using provided neuron ID: $NEURON_ID"
-else
-    # Try to get from deployment data
-    DEPLOYMENT_DATA="generated/sns_deployment_data.json"
-    if [ -f "$DEPLOYMENT_DATA" ]; then
-        if command -v jq &> /dev/null; then
-            NEURON_ID=$(jq -r '.icp_neuron_id // empty' "$DEPLOYMENT_DATA" 2>/dev/null)
-        else
-            # Fallback: try to extract with grep/sed
-            NEURON_ID=$(cat "$DEPLOYMENT_DATA" | grep -o '"icp_neuron_id"[[:space:]]*:[[:space:]]*[0-9]*' | sed 's/.*"icp_neuron_id"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/' | head -1)
-        fi
-
-        if [ -z "$NEURON_ID" ] || [ "$NEURON_ID" = "null" ]; then
-            print_error "No neuron ID provided and deployment data not found or missing icp_neuron_id"
-            print_info "Usage: $0 [neuron_id]"
-            exit 1
-        fi
-        print_info "Using neuron ID from deployment data: $NEURON_ID"
-    else
-        print_error "No neuron ID provided and deployment data not found"
-        print_info "Usage: $0 [neuron_id]"
-        exit 1
-    fi
-fi
-
-print_info "ICP Governance canister: $GOVERNANCE_CANISTER"
-
 # Check if dfx is running
 if ! dfx ping >/dev/null 2>&1; then
     print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
     exit 1
 fi
 
-print_header "Querying ICP Neuron"
+# Deployment data check is handled by Rust code (it can work without deployment data)
+# if no neuron ID is provided and no deployment data exists, Rust will prompt
 
-# Use the Rust binary to get neuron information
-if [ -n "$NEURON_ID" ]; then
-    cargo run --bin local_sns -- get-icp-neuron "$NEURON_ID"
-else
-    cargo run --bin local_sns -- get-icp-neuron
-fi
+print_header "Get ICP Neuron Info"
 
-if [ $? -eq 0 ]; then
-    print_success "Query complete"
-else
-    print_error "Failed to query neuron"
-    exit 1
-fi
+# Build command arguments - pass through whatever was provided
+CMD_ARGS=("get-icp-neuron")
+# Pass all provided arguments through - Rust code will handle interactive prompts for missing ones
+for arg in "$@"; do
+    CMD_ARGS+=("$arg")
+done
+
+cargo run --bin local_sns -- "${CMD_ARGS[@]}"
