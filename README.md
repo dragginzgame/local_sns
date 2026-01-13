@@ -289,6 +289,8 @@ The output displays a formatted table showing neuron ID, stake, dissolve delay, 
 
 Create an SNS neuron by staking tokens from the SNS ledger balance.
 
+> **Note**: You must have tokens in your ledger balance before creating a neuron. Use `mint-sns-tokens` first to mint tokens to your account.
+
 **Usage:**
 
 ```bash
@@ -332,6 +334,8 @@ The command disburses the full neuron stake to the receiver.
 ### `mint-sns-tokens`
 
 Create a governance proposal to mint tokens and get all neurons to vote on it.
+
+> **Note**: This should be done before creating neurons. You need tokens in your ledger balance to stake them into neurons.
 
 **Usage:**
 
