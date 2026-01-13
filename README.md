@@ -50,7 +50,9 @@ local_sns/
 │   ├── set_icp_visibility.sh      # Set ICP neuron visibility (interactive)
 │   ├── create_sns_neuron.sh       # Create SNS neuron by staking tokens (interactive)
 │   ├── disburse_sns_neuron.sh     # Disburse tokens from SNS neuron (interactive)
-│   └── mint_sns_tokens.sh         # Mint SNS tokens via proposal (interactive)
+│   ├── mint_sns_tokens.sh         # Mint SNS tokens via proposal (interactive)
+│   ├── increase_sns_dissolve_delay.sh  # Increase dissolve delay for SNS neuron (interactive)
+│   └── manage_sns_dissolving.sh   # Start or stop dissolving SNS neuron (interactive)
 └── generated/             # Generated files (git-ignored)
     ├── sns_deployment_data.json
     └── participants/
@@ -78,19 +80,26 @@ local_sns/
 bash scripts/start.sh
 ```
 
-The menu provides easy access to all available operations:
+The menu provides easy access to all available operations. You can use either numbers or letter shortcuts:
 
-- **1. Add SNS Neuron Hotkey** - Add a hotkey to an SNS participant neuron (interactive)
-- **2. Add ICP Neuron Hotkey** - Add a hotkey to the ICP neuron used for SNS deployment (interactive)
-- **3. List SNS Neurons** - Query and display SNS neurons for a principal (interactive)
-- **4. Get ICP Neuron Info** - Get detailed information about the ICP neuron (interactive)
-- **5. Set ICP Neuron Visibility** - Set the ICP neuron to public or private (interactive)
-- **6. Create SNS Neuron** - Create an SNS neuron by staking tokens from ledger balance (interactive)
-- **7. Disburse SNS Neuron** - Disburse tokens from an SNS neuron to a receiver (interactive)
-- **8. Mint SNS Tokens** - Mint additional tokens by creating a proposal (interactive)
-- **9. Deploy New SNS** - Create a new SNS instance (creates a separate SNS, does not replace existing)
-- **b. Rebuild Binary** - Rebuild the Rust binary (useful after code changes)
-- **0. Exit** - Exit the menu
+**SNS Operations:**
+- **1 / [H]** Add SNS Neuron Hotkey - Add a hotkey to an SNS participant neuron (interactive)
+- **2 / [L]** List SNS Neurons - Query and display SNS neurons for a principal (interactive)
+- **3 / [C]** Create SNS Neuron - Create an SNS neuron by staking tokens from ledger balance (interactive)
+- **4 / [D]** Disburse SNS Neuron - Disburse tokens from an SNS neuron to a receiver (interactive)
+- **5 / [M]** Mint SNS Tokens - Mint additional tokens by creating a proposal (interactive)
+- **6 / [I]** Increase SNS Neuron Dissolve Delay - Add dissolve delay to an SNS neuron (interactive)
+- **[DD]** Dissolve SNS Neuron - Start or stop dissolving for an SNS neuron (interactive)
+
+**ICP Operations:**
+- **7** Add ICP Neuron Hotkey - Add a hotkey to the ICP neuron used for SNS deployment (interactive)
+- **8** Get ICP Neuron Info - Get detailed information about the ICP neuron (interactive)
+- **9** Set ICP Neuron Visibility - Set the ICP neuron to public or private (interactive)
+
+**System Operations:**
+- **[d]** Deploy New SNS - Create a new SNS instance (creates a separate SNS, does not replace existing)
+- **[b]** Rebuild Binary - Rebuild the Rust binary (useful after code changes)
+- **0** Exit - Exit the menu
 
 The menu will automatically check if an SNS is deployed. If not, it will prompt you to deploy one on first run.
 
@@ -137,6 +146,16 @@ bash scripts/disburse_sns_neuron.sh
 # Or with arguments:
 bash scripts/disburse_sns_neuron.sh <participant_principal> [neuron_id_hex|receiver_principal] [receiver_principal]
 
+# Increase SNS neuron dissolve delay (interactive - prompts for participant, neuron, delay)
+bash scripts/increase_sns_dissolve_delay.sh
+# Or with arguments:
+bash scripts/increase_sns_dissolve_delay.sh <principal> [neuron_id_hex] [additional_dissolve_delay_seconds]
+
+# Manage SNS neuron dissolving state (interactive - start or stop dissolving)
+bash scripts/manage_sns_dissolving.sh
+# Or with arguments:
+bash scripts/manage_sns_dissolving.sh <principal> [start|stop] [neuron_id_hex]
+
 # Mint SNS tokens (interactive - prompts for proposer, receiver, amount)
 bash scripts/mint_sns_tokens.sh
 # Or with arguments:
@@ -173,6 +192,12 @@ cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [
 
 # Disburse SNS neuron (interactive)
 cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
+
+# Increase SNS neuron dissolve delay (interactive)
+cargo run --bin local_sns -- increase-sns-dissolve-delay [participant_principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
+
+# Manage SNS neuron dissolving state (interactive)
+cargo run --bin local_sns -- manage-sns-dissolving [participant_principal] [start|stop] [neuron_id_hex]
 
 # Mint SNS tokens (interactive)
 cargo run --bin local_sns -- mint-sns-tokens [proposer_principal] [receiver_principal] [amount_e8s]
@@ -385,6 +410,42 @@ cargo run --bin local_sns -- get-icp-neuron [neuron_id]
 
 Returns full neuron information as JSON.
 
+### `increase-sns-dissolve-delay`
+
+Increase the dissolve delay for an SNS neuron by adding additional seconds.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- increase-sns-dissolve-delay [participant_principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `neuron_id_hex`: Optional. Neuron ID in hex format. If not provided, shows neuron selection menu.
+- `additional_dissolve_delay_seconds`: Optional. Additional dissolve delay in seconds to add. If not provided, prompts interactively.
+
+The command will show available neurons and allow you to select which one to modify.
+
+### `manage-sns-dissolving`
+
+Start or stop dissolving for an SNS neuron.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- manage-sns-dissolving [participant_principal] [start|stop] [neuron_id_hex]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `start|stop`: Optional. Action to perform. If not provided, shows interactive menu:
+  - `[1] Start Dissolving`
+  - `[2] Stop Dissolving`
+- `neuron_id_hex`: Optional. Neuron ID in hex format. If not provided, shows neuron selection menu.
+
 ## Canister IDs
 
 Uses standard NNS canister IDs for local development:
@@ -477,6 +538,14 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
 - **`disburse_sns_neuron.sh`** - Disburse tokens from SNS neuron (interactive)
   - Prompts for participant, neuron, and receiver if not provided
+
+- **`increase_sns_dissolve_delay.sh`** - Increase dissolve delay for SNS neuron (interactive)
+  - Prompts for participant, neuron selection, and additional dissolve delay if not provided
+  - Shows neuron selection menu if neuron ID not specified
+
+- **`manage_sns_dissolving.sh`** - Start or stop dissolving for SNS neuron (interactive)
+  - Prompts for participant, action (start/stop), and neuron selection if not provided
+  - Shows action menu and neuron selection menu
 
 All scripts can be run with arguments to skip prompts, or without arguments for full interactivity.
 
