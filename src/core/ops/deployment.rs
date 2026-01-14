@@ -165,9 +165,7 @@ pub async fn create_and_wait_for_proposal(
     // Wait for Proposal Execution
     print_header("Waiting for Proposal Execution");
     print_step(&format!("Waiting for proposal {proposal_id} to execute..."));
-    print_warning(
-        "Proposal execution may take time. In local dfx, you may need to manually advance time.",
-    );
+    print_warning("Proposal execution may take some time");
 
     // Poll for proposal execution
     let mut executed = false;
@@ -624,7 +622,6 @@ pub async fn finalize_sns_sale(ctx: &DeploymentContext, swap_sns: Principal) -> 
         print_warning(&format!(
             "Swap not in finalizable state (lifecycle: {lifecycle})"
         ));
-        print_info("You may need to manually advance time or finalize the swap");
 
         // Try finalizing anyway - sometimes lifecycle check is delayed
         if direct_participants >= min_participants

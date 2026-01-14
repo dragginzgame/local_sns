@@ -21,53 +21,154 @@ use crate::core::ops::sns_governance_ops::{
 use crate::core::ops::snsw_ops::check_sns_deployed_default_path;
 use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
-/// Helper function to select a participant interactively
-/// Includes the owner (with "(owner)" label) and all participants
-fn select_participant() -> Result<Principal> {
+/// Select participant OR enter custom principal
+/// Shows participants (1-N) OR allows entering a custom principal
+fn select_participant_or_custom() -> Result<Principal> {
+    select_participant_or_custom_with_label(None)
+}
+
+/// Select participant OR enter custom principal with optional label
+/// Shows participants (1-N) OR allows entering a custom principal
+fn select_participant_or_custom_with_label(label: Option<&str>) -> Result<Principal> {
     use crate::core::utils::data_output::SnsCreationData;
     use std::io::{self, Write};
 
-    print_header("Select Participant");
-
-    // Read deployment data
+    // Try to read deployment data
     let deployment_path = crate::core::utils::data_output::get_output_path();
-    let data_content =
-        std::fs::read_to_string(&deployment_path).context("Failed to read deployment data")?;
-    let deployment_data: SnsCreationData =
-        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    let total_options = 1 + deployment_data.participants.len(); // 1 for owner + participants
+    if deployment_path.exists() {
+        if let Ok(data_content) = std::fs::read_to_string(&deployment_path) {
+            if let Ok(deployment_data) = serde_json::from_str::<SnsCreationData>(&data_content) {
+                let owner_option = deployment_data.participants.len() + 1;
+                let custom_option = owner_option + 1;
 
-    println!("Available options:");
-    println!();
-    // Show owner first
-    println!("  [1] {} (owner)", deployment_data.owner_principal);
-    // Show participants
-    for (i, participant) in deployment_data.participants.iter().enumerate() {
-        println!("  [{}] {}", i + 2, participant.principal);
-    }
-    println!();
-    print!("Select option number (1-{}): ", total_options);
-    io::stdout().flush()?;
+                if let Some(lbl) = label {
+                    println!("{}", lbl);
+                    println!();
+                }
+                println!("Available options:");
+                println!();
+                // Show participants first
+                for (i, participant) in deployment_data.participants.iter().enumerate() {
+                    println!("  [{}] {}", i + 1, participant.principal);
+                }
+                // Show owner before custom principal
+                println!(
+                    "  [{}] {} (SNS proposer)",
+                    owner_option, deployment_data.owner_principal
+                );
+                println!("  [{}] Enter custom principal", custom_option);
+                println!();
+                print!(
+                    "Select option number (1-{}) or enter principal: ",
+                    custom_option
+                );
+                io::stdout().flush()?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let selection: usize = input.trim().parse().context("Invalid selection")?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                let input_trimmed = input.trim();
 
-    if selection < 1 || selection > total_options {
-        anyhow::bail!(
-            "Invalid selection. Please choose a number between 1 and {}",
-            total_options
-        );
-    }
+                // If input is empty, treat as invalid
+                if input_trimmed.is_empty() {
+                    anyhow::bail!("No input provided. Please enter a number or principal.");
+                }
 
-    // Selection 1 is owner, selections 2+ are participants
-    if selection == 1 {
-        Principal::from_text(&deployment_data.owner_principal)
-            .context("Failed to parse owner principal")
+                // Check if input looks like a principal (contains dashes, typical format)
+                // Principals typically have 5 dashes and are 63 characters long
+                if input_trimmed.contains('-') && input_trimmed.len() > 20 {
+                    // Try to parse as principal directly
+                    match Principal::from_text(input_trimmed) {
+                        Ok(principal) => return Ok(principal),
+                        Err(e) => {
+                            // If principal parsing fails, check if it's a number
+                            // Otherwise return the error
+                            if input_trimmed.parse::<usize>().is_ok() {
+                                // It's actually a number, continue to number parsing below
+                            } else {
+                                return Err(anyhow::anyhow!("Failed to parse principal: {}", e));
+                            }
+                        }
+                    }
+                }
+
+                // Try to parse as number
+                match input_trimmed.parse::<usize>() {
+                    Ok(selection) => {
+                        if selection < 1 || selection > custom_option {
+                            anyhow::bail!(
+                                "Invalid selection. Please choose a number between 1 and {}",
+                                custom_option
+                            );
+                        }
+
+                        if selection == custom_option {
+                            // Custom principal option
+                            print!("Enter principal: ");
+                            io::stdout().flush()?;
+                            let mut principal_input = String::new();
+                            io::stdin().read_line(&mut principal_input)?;
+                            let principal_trimmed = principal_input.trim();
+                            if principal_trimmed.is_empty() {
+                                anyhow::bail!("No principal provided.");
+                            }
+                            Principal::from_text(principal_trimmed)
+                                .context("Failed to parse principal")
+                        } else if selection == owner_option {
+                            // Owner (SNS proposer)
+                            Principal::from_text(&deployment_data.owner_principal)
+                                .context("Failed to parse owner principal")
+                        } else {
+                            // Participant (selection is 1-based, participants array is 0-based)
+                            Principal::from_text(
+                                &deployment_data.participants[selection - 1].principal,
+                            )
+                            .context("Failed to parse selected participant principal")
+                        }
+                    }
+                    Err(_) => {
+                        // Not a number, try to parse as principal anyway
+                        Principal::from_text(input_trimmed).context("Failed to parse principal")
+                    }
+                }
+            } else {
+                // Deployment data exists but can't parse - fall back to custom input
+                if let Some(lbl) = label {
+                    println!("{}", lbl);
+                } else {
+                    print_header("Select Principal");
+                }
+                print!("Enter principal: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Principal::from_text(input.trim()).context("Failed to parse principal")
+            }
+        } else {
+            // Can't read deployment data - fall back to custom input
+            if let Some(lbl) = label {
+                println!("{}", lbl);
+            } else {
+                print_header("Select Principal");
+            }
+            print!("Enter principal: ");
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            Principal::from_text(input.trim()).context("Failed to parse principal")
+        }
     } else {
-        Principal::from_text(&deployment_data.participants[selection - 2].principal)
-            .context("Failed to parse selected participant principal")
+        // No deployment data - fall back to custom input
+        if let Some(lbl) = label {
+            println!("{}", lbl);
+        } else {
+            print_header("Select Principal");
+        }
+        print!("Enter principal: ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        Principal::from_text(input.trim()).context("Failed to parse principal")
     }
 }
 
@@ -160,7 +261,7 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
             let owner_principal = if args.len() >= 4 {
                 Principal::from_text(&args[3]).context("Failed to parse owner principal")?
             } else {
-                select_participant()?
+                select_participant_or_custom()?
             };
 
             // Step 2: Get neuron_id and hotkey_principal
@@ -317,8 +418,8 @@ pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
     let principal = if args.len() < 3 {
-        // No principal provided - show participant selection (includes owner)
-        select_participant()?
+        // No principal provided - show participant selection or custom (includes owner)
+        select_participant_or_custom()?
     } else {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     };
@@ -751,22 +852,11 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
 pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get receiver principal (select participant if not provided)
+    // Step 1: Get receiver principal (select participant or custom if not provided)
     let receiver_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse receiver principal")?
     } else {
-        // Try to select participant, or prompt for principal
-        match select_participant() {
-            Ok(p) => p,
-            Err(_) => {
-                print_header("Mint ICP");
-                print!("Enter receiver principal: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
-            }
-        }
+        select_participant_or_custom()?
     };
 
     // Get minting account balance to show user
@@ -826,31 +916,11 @@ pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
 pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get principal (select participant if not provided)
+    // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Try to select participant, or use dfx identity as fallback
-        match select_participant() {
-            Ok(p) => p,
-            Err(_) => {
-                // Fallback to dfx identity principal
-                use crate::core::ops::identity::load_dfx_identity;
-                match load_dfx_identity(None)
-                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
-                {
-                    Ok(p) => p,
-                    Err(_) => {
-                        print_header("Create ICP Neuron");
-                        print!("Enter principal: ");
-                        io::stdout().flush()?;
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input)?;
-                        Principal::from_text(input.trim()).context("Failed to parse principal")?
-                    }
-                }
-            }
-        }
+        select_participant_or_custom()?
     };
 
     // Get ICP balance for the principal to show available amount
@@ -1022,31 +1092,11 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
 pub async fn handle_list_icp_neurons(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get principal (select participant if not provided)
+    // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Try to select participant, or use dfx identity as fallback
-        match select_participant() {
-            Ok(p) => p,
-            Err(_) => {
-                // Fallback to dfx identity principal
-                use crate::core::ops::identity::load_dfx_identity;
-                match load_dfx_identity(None)
-                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
-                {
-                    Ok(p) => p,
-                    Err(_) => {
-                        print_header("List ICP Neurons");
-                        print!("Enter principal: ");
-                        io::stdout().flush()?;
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input)?;
-                        Principal::from_text(input.trim()).context("Failed to parse principal")?
-                    }
-                }
-            }
-        }
+        select_participant_or_custom()?
     };
 
     print_header("Listing ICP Neurons");
@@ -1259,33 +1309,12 @@ fn display_icp_neuron_details(neuron: &crate::core::declarations::icp_governance
 pub async fn handle_get_icp_balance(args: &[String]) -> Result<()> {
     use crate::core::ops::identity::create_agent;
     use crate::core::utils::constants::LEDGER_CANISTER;
-    use std::io::{self, Write};
 
-    // Step 1: Get principal (select participant if not provided)
+    // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Try to select participant, or use dfx identity as fallback
-        match select_participant() {
-            Ok(p) => p,
-            Err(_) => {
-                // Fallback to dfx identity principal
-                use crate::core::ops::identity::load_dfx_identity;
-                match load_dfx_identity(None)
-                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
-                {
-                    Ok(p) => p,
-                    Err(_) => {
-                        print_header("Get ICP Balance");
-                        print!("Enter principal: ");
-                        io::stdout().flush()?;
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input)?;
-                        Principal::from_text(input.trim()).context("Failed to parse principal")?
-                    }
-                }
-            }
-        }
+        select_participant_or_custom()?
     };
 
     // Step 2: Get subaccount (optional)
@@ -1336,7 +1365,6 @@ pub async fn handle_get_icp_balance(args: &[String]) -> Result<()> {
 pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
     use crate::core::ops::identity::create_agent;
     use crate::core::utils::data_output;
-    use std::io::{self, Write};
 
     // Read deployment data to get ledger canister ID
     let deployment_path = data_output::get_output_path();
@@ -1352,41 +1380,11 @@ pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
         .and_then(|s| Principal::from_text(s).ok())
         .context("Failed to parse ledger canister ID from deployment data")?;
 
-    // Step 1: Get principal (interactive if not provided)
+    // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Try to select participant or use dfx identity
-        if deployment_path.exists() {
-            match select_participant() {
-                Ok(p) => p,
-                Err(_) => {
-                    // Fallback to dfx identity
-                    use crate::core::ops::identity::load_dfx_identity;
-                    match load_dfx_identity(None)
-                        .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
-                    {
-                        Ok(p) => p,
-                        Err(_) => {
-                            print_header("Get SNS Balance");
-                            print!("Enter principal: ");
-                            io::stdout().flush()?;
-                            let mut input = String::new();
-                            io::stdin().read_line(&mut input)?;
-                            Principal::from_text(input.trim())
-                                .context("Failed to parse principal")?
-                        }
-                    }
-                }
-            }
-        } else {
-            print_header("Get SNS Balance");
-            print!("Enter principal: ");
-            io::stdout().flush()?;
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            Principal::from_text(input.trim()).context("Failed to parse principal")?
-        }
+        select_participant_or_custom()?
     };
 
     // Step 2: Get subaccount (optional)
@@ -1439,22 +1437,18 @@ pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
 pub async fn handle_mint_sns_tokens(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get proposer principal (select if not provided)
+    // Step 1: Get proposer principal (select participant or custom if not provided)
     let proposer_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse proposer principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom_with_label(Some("Select Proposer Principal:"))?
     };
 
-    // Step 2: Get receiver_principal
+    // Step 2: Get receiver_principal (select participant or custom if not provided)
     let receiver_principal = if args.len() >= 4 {
         Principal::from_text(&args[3]).context("Failed to parse receiver principal")?
     } else {
-        print!("Enter receiver principal: ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+        select_participant_or_custom_with_label(Some("Select Receiver Principal:"))?
     };
 
     // Step 3: Get amount_e8s
@@ -1529,7 +1523,7 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Get balance and fee to show user options
@@ -1698,7 +1692,7 @@ pub async fn handle_disburse_sns_neuron(args: &[String]) -> Result<()> {
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2 & 3: Get neuron_id and receiver_principal
@@ -1834,11 +1828,11 @@ fn print_add_hotkey_usage(program_name: &str) {
 pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get participant principal (select if not provided)
+    // Step 1: Get participant principal (select participant or custom if not provided)
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2: Get neuron ID (select if not provided)
@@ -1924,7 +1918,7 @@ pub async fn handle_manage_sns_dissolving(args: &[String]) -> Result<()> {
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2: Get action (start/stop) - interactive if not provided
@@ -2096,11 +2090,11 @@ pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
     use crate::core::ops::governance_ops::disburse_icp_neuron_for_principal_default_path;
     use std::io::{self, Write};
 
-    // Step 1: Get principal (select participant if not provided)
+    // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2 & 3: Get neuron_id and receiver_principal
@@ -2192,7 +2186,7 @@ pub async fn handle_increase_icp_dissolve_delay(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2: Get neuron ID (select if not provided)
@@ -2264,7 +2258,7 @@ pub async fn handle_manage_icp_dissolving(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant()?
+        select_participant_or_custom()?
     };
 
     // Step 2: Get action (start/stop) - interactive if not provided

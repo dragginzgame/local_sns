@@ -102,7 +102,7 @@ show_main_menu() {
     echo -n -e "${CYAN}Select category [0-3, I, S, U]: ${NC}"
 }
 
-# Show ICP submenu
+# Show ICP submenu (when SNS is deployed)
 show_icp_menu() {
     clear
     print_header "ICP Operations"
@@ -136,6 +136,29 @@ show_icp_menu() {
     echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
     echo ""
     echo -n -e "${CYAN}Select operation [0-8, L, C, D, M, H, I, DD, B, or Enter]: ${NC}"
+}
+
+# Show ICP submenu (when SNS is NOT deployed)
+show_icp_menu_no_sns() {
+    clear
+    print_header "ICP Operations (No SNS Deployed)"
+    echo ""
+    echo -e "${YELLOW}No SNS deployment found on the network.${NC}"
+    echo ""
+    echo -e "${CYAN}Available Operations:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC} / [${GREEN}M${NC}]  Mint ICP Tokens"
+    echo -e "     Mint ICP tokens from minting account to a receiver"
+    echo ""
+    echo -e "  ${GREEN}2${NC} / [${GREEN}B${NC}]  Get ICP Balance"
+    echo -e "     Get ICP ledger balance for an account"
+    echo ""
+    echo -e "  ${GREEN}3${NC} / [${GREEN}D${NC}]  Deploy SNS"
+    echo -e "     Deploy a new SNS instance"
+    echo ""
+    echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
+    echo ""
+    echo -n -e "${CYAN}Select operation [0-3, M, B, D, or Enter]: ${NC}"
 }
 
 # Show SNS submenu
@@ -353,119 +376,151 @@ main() {
         exit $?
     fi
     
-    # Check SNS deployment status and show message if not deployed
-    if ! check_sns_deployed; then
-        echo ""
-        print_info "Press Enter to deploy an SNS."
-        print_info "Configuration can be modified in src/init/sns_config.rs"
-        echo ""
-        read -r
-        # Automatically deploy SNS
-        run_script "utils" "1"
-        echo ""
-        echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-        read -r
-    fi
-    
     # Interactive menu loop
     while true; do
-        show_main_menu
-        read -r category_choice
-        
-        case "$category_choice" in
-            0)
+        # Check if SNS is deployed - if not, show simplified menu directly
+        if ! check_sns_deployed; then
+            # No SNS deployed - show simplified menu
+            show_icp_menu_no_sns
+            read -r operation_choice
+            
+            # Handle empty input (Enter pressed) - exit
+            if [ -z "$operation_choice" ]; then
                 print_info "Exiting..."
                 exit 0
-                ;;
-            1|i|I)
-                # ICP submenu
-                while true; do
-                    show_icp_menu
-                    read -r operation_choice
-                    
-                    # Handle empty input (Enter pressed) - go back to main menu
-                    if [ -z "$operation_choice" ]; then
-                        break
-                    fi
-                    
-                    case "$operation_choice" in
-                        0)
-                            break  # Back to main menu
-                            ;;
-                        [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
-                            run_script "icp" "$operation_choice"
-                            echo ""
-                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-                            read -r
-                            ;;
-                        *)
-                            print_error "Invalid option. Please see menu for available options."
-                            sleep 1
-                            ;;
-                    esac
-                done
-                ;;
-            2|s|S)
-                # SNS submenu
-                while true; do
-                    show_sns_menu
-                    read -r operation_choice
-                    
-                    # Handle empty input (Enter pressed) - go back to main menu
-                    if [ -z "$operation_choice" ]; then
-                        break
-                    fi
-                    
-                    case "$operation_choice" in
-                        0)
-                            break  # Back to main menu
-                            ;;
-                        [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
-                            run_script "sns" "$operation_choice"
-                            echo ""
-                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-                            read -r
-                            ;;
-                        *)
-                            print_error "Invalid option. Please see menu for available options."
-                            sleep 1
-                            ;;
-                    esac
-                done
-                ;;
-            3|u|U)
-                # Utils submenu
-                while true; do
-                    show_utils_menu
-                    read -r operation_choice
-                    
-                    # Handle empty input (Enter pressed) - go back to main menu
-                    if [ -z "$operation_choice" ]; then
-                        break
-                    fi
-                    
-                    case "$operation_choice" in
-                        0)
-                            break  # Back to main menu
-                            ;;
-                        [1-2]|[dD]|[rR])
-                            run_script "utils" "$operation_choice"
-                            echo ""
-                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-                            read -r
-                            ;;
-                        *)
-                            print_error "Invalid option. Please see menu for available options."
-                            sleep 1
-                            ;;
-                    esac
-                done
-                ;;
-            *)
-                print_error "Invalid option. Please see menu for available options."
-                sleep 1
-                ;;
-        esac
+            fi
+            
+            case "$operation_choice" in
+                0)
+                    print_info "Exiting..."
+                    exit 0
+                    ;;
+                1|m|M)
+                    # Mint ICP
+                    run_script "icp" "4"
+                    echo ""
+                    echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                    read -r
+                    ;;
+                2|b|B)
+                    # Get ICP Balance
+                    run_script "icp" "8"
+                    echo ""
+                    echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                    read -r
+                    ;;
+                3|d|D)
+                    # Deploy SNS
+                    run_script "utils" "1"
+                    echo ""
+                    echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                    read -r
+                    ;;
+                *)
+                    print_error "Invalid option. Please see menu for available options."
+                    sleep 1
+                    ;;
+            esac
+        else
+            # SNS is deployed - show main menu
+            show_main_menu
+            read -r category_choice
+            
+            case "$category_choice" in
+                0)
+                    print_info "Exiting..."
+                    exit 0
+                    ;;
+                1|i|I)
+                    # ICP submenu
+                    while true; do
+                        show_icp_menu
+                        read -r operation_choice
+                        
+                        # Handle empty input (Enter pressed) - go back to main menu
+                        if [ -z "$operation_choice" ]; then
+                            break
+                        fi
+                        
+                        case "$operation_choice" in
+                            0)
+                                break  # Back to main menu
+                                ;;
+                            [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
+                                run_script "icp" "$operation_choice"
+                                echo ""
+                                echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                                read -r
+                                ;;
+                            *)
+                                print_error "Invalid option. Please see menu for available options."
+                                sleep 1
+                                ;;
+                        esac
+                    done
+                    ;;
+                2|s|S)
+                    # SNS submenu
+                    while true; do
+                        show_sns_menu
+                        read -r operation_choice
+                        
+                        # Handle empty input (Enter pressed) - go back to main menu
+                        if [ -z "$operation_choice" ]; then
+                            break
+                        fi
+                        
+                        case "$operation_choice" in
+                            0)
+                                break  # Back to main menu
+                                ;;
+                            [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
+                                run_script "sns" "$operation_choice"
+                                echo ""
+                                echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                                read -r
+                                ;;
+                            *)
+                                print_error "Invalid option. Please see menu for available options."
+                                sleep 1
+                                ;;
+                        esac
+                    done
+                    ;;
+                3|u|U)
+                    # Utils submenu
+                    while true; do
+                        show_utils_menu
+                        read -r operation_choice
+                        
+                        # Handle empty input (Enter pressed) - go back to main menu
+                        if [ -z "$operation_choice" ]; then
+                            break
+                        fi
+                        
+                        case "$operation_choice" in
+                            0)
+                                break  # Back to main menu
+                                ;;
+                            [1-2]|[dD]|[rR])
+                                run_script "utils" "$operation_choice"
+                                echo ""
+                                echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                                read -r
+                                ;;
+                            *)
+                                print_error "Invalid option. Please see menu for available options."
+                                sleep 1
+                                ;;
+                        esac
+                    done
+                    ;;
+                *)
+                    print_error "Invalid option. Please see menu for available options."
+                    sleep 1
+                    ;;
+            esac
+        fi
     done
 }
 

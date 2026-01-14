@@ -275,7 +275,7 @@ pub async fn get_minting_account_balance() -> Result<u64> {
 pub async fn mint_icp_default_path(receiver_principal: Principal, amount_e8s: u64) -> Result<u64> {
     use super::identity::{create_agent, load_minting_identity};
     use super::ledger_ops::transfer_icp;
-    use crate::core::utils::constants::{ICP_TRANSFER_FEE, LEDGER_CANISTER};
+    use crate::core::utils::constants::LEDGER_CANISTER;
 
     // Load minting identity
     let identity = load_minting_identity().context("Failed to load minting identity")?;
@@ -288,13 +288,12 @@ pub async fn mint_icp_default_path(receiver_principal: Principal, amount_e8s: u6
     let ledger_canister =
         Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
 
-    // Transfer ICP (amount includes fee)
-    let transfer_amount = amount_e8s + ICP_TRANSFER_FEE;
+    // Transfer ICP (minting doesn't require fee - fee is deducted from minting account automatically)
     let block_height = transfer_icp(
         &agent,
         ledger_canister,
         receiver_principal,
-        transfer_amount,
+        amount_e8s,
         None,
     )
     .await
