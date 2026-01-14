@@ -332,7 +332,7 @@ pub async fn create_and_participate_participant(
     let seed_path = crate::core::utils::data_output::get_output_dir()
         .join("participants")
         .join(format!("participant_{}.seed", participant_num));
-        crate::core::ops::identity::save_seed_to_file(&seed, &seed_path)
+    crate::core::ops::identity::save_seed_to_file(&seed, &seed_path)
         .with_context(|| format!("Failed to save participant {participant_num} seed"))?;
     print_info(&format!(
         "  Saved participant identity: {}",
@@ -658,14 +658,21 @@ pub async fn write_deployment_data(
         participants: participant_principals
             .iter()
             .enumerate()
-            .map(|(i, p)| crate::core::utils::data_output::ParticipantData {
-                principal: p.to_string(),
-                seed_file: format!("generated/participants/participant_{}.seed", i + 1),
+            .map(|(i, p)| {
+                // Construct path using PathBuf for cross-platform compatibility
+                let seed_path = crate::core::utils::data_output::get_output_dir()
+                    .join("participants")
+                    .join(format!("participant_{}.seed", i + 1));
+                crate::core::utils::data_output::ParticipantData {
+                    principal: p.to_string(),
+                    seed_file: seed_path.to_string_lossy().to_string(),
+                }
             })
             .collect(),
     };
 
-    crate::core::utils::data_output::write_data(&deployment_data).context("Failed to write deployment data file")?;
+    crate::core::utils::data_output::write_data(&deployment_data)
+        .context("Failed to write deployment data file")?;
 
     let output_path = crate::core::utils::data_output::get_output_path();
     print_success(&format!(
@@ -693,7 +700,7 @@ pub async fn deploy_sns() -> Result<()> {
 
     // Update SNS Subnet List (skipped for local)
     print_header("Updating SNS Subnet List");
-        crate::core::utils::print_warning(
+    crate::core::utils::print_warning(
         "Subnet update skipped - may need manual configuration for local setup",
     );
 

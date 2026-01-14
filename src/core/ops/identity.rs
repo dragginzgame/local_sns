@@ -12,13 +12,26 @@ oUQDQgAEPas6Iag4TUx+Uop+3NhE6s3FlayFtbwdhRVjvOar0kPTfE/N8N6btRnd
 74ly5xXEBNSXiENyxhEuzOZrIWMCNQ==
 -----END EC PRIVATE KEY-----"#;
 
+/// Get dfx config directory path
+/// Linux/macOS/WSL: ~/.config/dfx
+fn get_dfx_config_dir() -> Result<PathBuf> {
+    // Check for dfx-specific environment variable first
+    if let Ok(dfx_config_root) = std::env::var("DFX_CONFIG_ROOT") {
+        return Ok(PathBuf::from(dfx_config_root));
+    }
+
+    // Standard Linux/macOS/WSL path: ~/.config/dfx
+    let home = std::env::var("HOME").context("HOME environment variable not set")?;
+    Ok(PathBuf::from(home).join(".config").join("dfx"))
+}
+
 /// Load dfx identity from default location
 /// Tries both Secp256k1 and Ed25519 formats
 pub fn load_dfx_identity(identity_name: Option<&str>) -> Result<Box<dyn Identity>> {
     let name = identity_name.unwrap_or("default");
-    let home = std::env::var("HOME").context("HOME environment variable not set")?;
-    let identity_path = PathBuf::from(home)
-        .join(".config/dfx/identity")
+    let dfx_config_dir = get_dfx_config_dir()?;
+    let identity_path = dfx_config_dir
+        .join("identity")
         .join(name)
         .join("identity.pem");
 
@@ -77,8 +90,8 @@ fn get_dfx_replica_url() -> String {
     // First check if DFX_NETWORK is set, otherwise use "local"
     let network_name = std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
 
-    if let Ok(home) = std::env::var("HOME") {
-        let networks_path = PathBuf::from(home).join(".config/dfx/networks.json");
+    if let Ok(dfx_config_dir) = get_dfx_config_dir() {
+        let networks_path = dfx_config_dir.join("networks.json");
         if let Ok(content) = std::fs::read_to_string(&networks_path) {
             // Try to parse JSON and get bind address for the network
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
