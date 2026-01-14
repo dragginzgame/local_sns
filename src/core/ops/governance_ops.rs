@@ -165,41 +165,6 @@ pub async fn add_hotkey_to_icp_neuron(
     }
 }
 
-/// High-level function to add a hotkey to the ICP neuron used for SNS deployment
-/// This reads deployment data, loads the owner identity, and adds the hotkey
-pub async fn add_hotkey_to_icp_neuron_default_path(hotkey_principal: Principal) -> Result<()> {
-    use super::identity::{create_agent, load_dfx_identity};
-
-    // Read deployment data
-    let deployment_path = crate::core::utils::data_output::get_output_path();
-    let data_content = std::fs::read_to_string(&deployment_path)
-        .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
-    let deployment_data: crate::core::utils::data_output::SnsCreationData =
-        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
-
-    // Get ICP neuron ID
-    let neuron_id = deployment_data.icp_neuron_id;
-
-    // Load owner identity (default dfx identity)
-    let identity = load_dfx_identity(None).context("Failed to load owner dfx identity")?;
-
-    // Create authenticated agent
-    let agent = create_agent(identity)
-        .await
-        .context("Failed to create agent with owner identity")?;
-
-    // ICP Governance canister (standard NNS canister ID for local development)
-    let governance_canister = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai")
-        .context("Failed to parse ICP Governance canister ID")?;
-
-    // Add hotkey
-    add_hotkey_to_icp_neuron(&agent, governance_canister, neuron_id, hotkey_principal)
-        .await
-        .context("Failed to add hotkey to ICP neuron")?;
-
-    Ok(())
-}
-
 /// Set neuron visibility (public/private)
 /// visibility: true = public (2), false = private (1)
 pub async fn set_neuron_visibility(
@@ -404,41 +369,6 @@ pub async fn create_icp_neuron_default_path(
     }
 
     Ok(neuron_id)
-}
-
-/// High-level function to set visibility for the ICP neuron used for SNS deployment
-/// This reads deployment data, loads the owner identity, and sets the visibility
-pub async fn set_icp_neuron_visibility_default_path(is_public: bool) -> Result<()> {
-    use super::identity::{create_agent, load_dfx_identity};
-
-    // Read deployment data
-    let deployment_path = crate::core::utils::data_output::get_output_path();
-    let data_content = std::fs::read_to_string(&deployment_path)
-        .with_context(|| format!("Failed to read deployment data from: {:?}", deployment_path))?;
-    let deployment_data: crate::core::utils::data_output::SnsCreationData =
-        serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
-
-    // Get ICP neuron ID
-    let neuron_id = deployment_data.icp_neuron_id;
-
-    // Load owner identity (default dfx identity)
-    let identity = load_dfx_identity(None).context("Failed to load owner dfx identity")?;
-
-    // Create authenticated agent
-    let agent = create_agent(identity)
-        .await
-        .context("Failed to create agent with owner identity")?;
-
-    // ICP Governance canister (standard NNS canister ID for local development)
-    let governance_canister = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai")
-        .context("Failed to parse ICP Governance canister ID")?;
-
-    // Set visibility
-    set_neuron_visibility(&agent, governance_canister, neuron_id, is_public)
-        .await
-        .context("Failed to set neuron visibility")?;
-
-    Ok(())
 }
 
 /// List all ICP neurons for a given principal, sorted by dissolve delay (lowest first) and cached stake (highest first)

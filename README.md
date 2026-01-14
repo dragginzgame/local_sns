@@ -128,7 +128,7 @@ Once an SNS is deployed, the menu provides a hierarchical structure with three m
 - **2 / [C]** Create SNS Neuron - Create an SNS neuron by staking tokens from ledger balance
 - **3 / [D]** Disburse SNS Neuron - Disburse tokens from an SNS neuron
 - **4 / [M]** Mint SNS Tokens - Mint additional tokens to an account
-- **5 / [H]** Add SNS Neuron Hotkey - Add a hotkey to an SNS participant neuron (interactive)
+- **5 / [H]** Add SNS Neuron Hotkey - Add a hotkey to an SNS neuron (supports owner, participants, or custom principals)
 - **6 / [I]** Increase SNS Neuron Dissolve Delay - Add dissolve delay to an SNS neuron
 - **7 / [DD]** Dissolve SNS Neuron - Start or stop dissolving for an SNS neuron
 - **8 / [B]** Get SNS Balance - Get SNS ledger balance for an account
@@ -150,22 +150,22 @@ After deploying an SNS (option 3 in the simplified menu), the menu automatically
 # Deploy a local SNS (fully automated)
 bash scripts/deploy_local_sns.sh
 
-# Add a hotkey to an SNS neuron (interactive - prompts for participant, neuron, hotkey, permissions)
+# Add a hotkey to an SNS neuron (interactive - prompts for principal, neuron, hotkey, permissions)
 bash scripts/add_sns_hotkey.sh
 # Or with arguments:
-bash scripts/add_sns_hotkey.sh <participant_principal> <hotkey_principal> [permissions]
+bash scripts/add_sns_hotkey.sh <principal> <hotkey_principal> [permissions]
 
 # Add a hotkey to ICP neuron (interactive - prompts for hotkey if not provided)
 bash scripts/add_icp_hotkey.sh
 # Or with argument:
 bash scripts/add_icp_hotkey.sh <hotkey_principal>
 
-# Query SNS neurons (interactive - shows participant menu if no principal provided)
+# Query SNS neurons (interactive - shows principal selection menu if no principal provided)
 bash scripts/get_sns_neurons.sh
 # Or with principal:
 bash scripts/get_sns_neurons.sh <principal>
 
-# List ICP neurons (interactive - shows participant menu if no principal provided)
+# List ICP neurons (interactive - shows principal selection menu if no principal provided)
 bash scripts/get_icp_neurons.sh
 # Or with principal:
 bash scripts/get_icp_neurons.sh <principal>
@@ -220,12 +220,12 @@ bash scripts/create_sns_neuron.sh
 # Or with arguments:
 bash scripts/create_sns_neuron.sh <principal> <amount_e8s> [memo] [dissolve_delay_seconds]
 
-# Disburse SNS neuron tokens (interactive - prompts for participant, neuron, receiver)
+# Disburse SNS neuron tokens (interactive - prompts for principal, neuron, receiver)
 bash scripts/disburse_sns_neuron.sh
 # Or with arguments:
-bash scripts/disburse_sns_neuron.sh <participant_principal> [neuron_id_hex|receiver_principal] [receiver_principal]
+bash scripts/disburse_sns_neuron.sh <principal> [neuron_id_hex|receiver_principal] [receiver_principal]
 
-# Increase SNS neuron dissolve delay (interactive - prompts for participant, neuron, delay)
+# Increase SNS neuron dissolve delay (interactive - prompts for principal, neuron, delay)
 bash scripts/increase_sns_dissolve_delay.sh
 # Or with arguments:
 bash scripts/increase_sns_dissolve_delay.sh <principal> [neuron_id_hex] [additional_dissolve_delay_seconds]
@@ -258,15 +258,15 @@ cargo build --release --bin local_sns
 cargo run --bin local_sns -- deploy-sns
 
 # Add hotkey to SNS neuron (interactive)
-cargo run --bin local_sns -- add-hotkey sns [participant_principal] [neuron_id_hex|hotkey_principal] [hotkey_principal|permissions] [permissions]
+cargo run --bin local_sns -- add-hotkey sns [principal] [neuron_id_hex|hotkey_principal] [hotkey_principal|permissions] [permissions]
 
 # Add hotkey to ICP neuron (interactive)
 cargo run --bin local_sns -- add-hotkey icp [hotkey_principal]
 
-# List SNS neurons (interactive - shows participant menu if no principal)
+# List SNS neurons (interactive - shows principal selection menu if no principal)
 cargo run --bin local_sns -- list-sns-neurons [principal]
 
-# List ICP neurons (interactive - shows participant menu if no principal)
+# List ICP neurons (interactive - shows principal selection menu if no principal)
 cargo run --bin local_sns -- list-icp-neurons [principal]
 
 # Create SNS neuron (interactive)
@@ -276,19 +276,19 @@ cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [
 cargo run --bin local_sns -- create-icp-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
 
 # Disburse SNS neuron (interactive)
-cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
+cargo run --bin local_sns -- disburse-sns-neuron [principal] [neuron_id_hex|receiver_principal] [receiver_principal]
 
 # Disburse ICP neuron (interactive)
 cargo run --bin local_sns -- disburse-icp-neuron [principal] [neuron_id|receiver_principal] [receiver_principal] [amount_e8s]
 
 # Increase SNS neuron dissolve delay (interactive)
-cargo run --bin local_sns -- increase-sns-dissolve-delay [participant_principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
+cargo run --bin local_sns -- increase-sns-dissolve-delay [principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
 
 # Increase ICP neuron dissolve delay (interactive)
 cargo run --bin local_sns -- increase-icp-dissolve-delay [principal] [neuron_id] [additional_dissolve_delay_seconds]
 
 # Manage SNS neuron dissolving state (interactive)
-cargo run --bin local_sns -- manage-sns-dissolving [participant_principal] [start|stop] [neuron_id_hex]
+cargo run --bin local_sns -- manage-sns-dissolving [principal] [start|stop] [neuron_id_hex]
 
 # Manage ICP neuron dissolving state (interactive)
 cargo run --bin local_sns -- manage-icp-dissolving [principal] [start|stop] [neuron_id]
@@ -389,7 +389,7 @@ cargo run --bin local_sns -- add-hotkey <sns|icp> [owner_principal] [neuron_id_h
 
 - `sns|icp`: Neuron type (required)
 - **For SNS neurons:**
-  - `owner_principal`: Optional. Participant principal who owns the neuron. If not provided, shows participant selection menu
+  - `owner_principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu
   - `neuron_id_hex|hotkey_principal`: Optional. Either neuron ID in hex format or hotkey principal. If not provided, shows neuron selection menu
   - `hotkey_principal`: Optional. Principal to add as hotkey. Prompts if not provided
   - `permissions`: Optional. Comma-separated permission types (default: `3,4` = SubmitProposal + Vote)
@@ -409,7 +409,7 @@ cargo run --bin local_sns -- list-sns-neurons [principal]
 
 **Arguments:**
 
-- `principal`: Optional. Principal to query neurons for. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal to query neurons for (owner, participant, or custom). If not provided, shows principal selection menu.
 
 The output displays a formatted table showing neuron ID, stake, dissolve delay, and permissions.
 
@@ -427,7 +427,7 @@ cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `principal`: Optional. Principal to create the neuron for. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal to create the neuron for (owner, participant, or custom). If not provided, shows principal selection menu.
 - `amount_e8s`: Optional. Amount of tokens to stake in e8s. If not provided, stakes all available balance (after deducting transfer fee).
 - `memo`: Optional. Memo to use for neuron creation. If not provided, auto-generated based on neuron count (neuron_count + 1).
 - `dissolve_delay_seconds`: Optional. Dissolve delay in seconds. If not provided or 0, no dissolve delay is set.
@@ -448,12 +448,12 @@ Disburse tokens from an SNS neuron to a receiver principal.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
+cargo run --bin local_sns -- disburse-sns-neuron [principal] [neuron_id_hex|receiver_principal] [receiver_principal]
 ```
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `neuron_id_hex`: Optional. Neuron ID in hex format. If not provided and receiver is not provided, shows neuron selection menu.
 - `receiver_principal`: Optional. Principal to receive the disbursed tokens. Prompts if not provided.
 
@@ -473,7 +473,7 @@ cargo run --bin local_sns -- mint-sns-tokens [proposer_principal] [receiver_prin
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `proposer_principal`: Optional. Principal of the participant who will create the proposal. If not provided, shows participant selection menu.
+- `proposer_principal`: Optional. Principal who will create the proposal (owner, participant, or custom). If not provided, shows principal selection menu.
 - `receiver_principal`: Optional. Principal to receive the minted tokens. Prompts if not provided.
 - `amount_e8s`: Optional. Amount of tokens to mint in e8s. Prompts if not provided.
 
@@ -507,7 +507,7 @@ cargo run --bin local_sns -- list-icp-neurons [principal]
 
 **Arguments:**
 
-- `principal`: Optional. Principal to query neurons for. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal to query neurons for (owner, participant, or custom). If not provided, shows principal selection menu.
 
 The output displays a formatted table showing neuron ID, stake, dissolve delay, and hotkeys. You can select a neuron to view full details.
 
@@ -525,7 +525,7 @@ cargo run --bin local_sns -- create-icp-neuron [principal] [amount_e8s] [memo] [
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `principal`: Optional. Principal to create the neuron for. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal to create the neuron for (owner, participant, or custom). If not provided, shows principal selection menu.
 - `amount_e8s`: Optional. Amount of ICP to stake in e8s. If not provided, stakes all available balance (after deducting transfer fee).
 - `memo`: Optional. Memo to use for neuron creation. If not provided, auto-generated based on neuron count (neuron_count + 1).
 - `dissolve_delay_seconds`: Optional. Dissolve delay in seconds. If not provided, prompts interactively.
@@ -550,7 +550,7 @@ cargo run --bin local_sns -- disburse-icp-neuron [principal] [neuron_id|receiver
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `neuron_id`: Optional. Neuron ID (number). If not provided and receiver is not provided, shows neuron selection menu.
 - `receiver_principal`: Optional. Principal to receive the disbursed tokens. Prompts if not provided.
 - `amount_e8s`: Optional. Amount to disburse in e8s. If not provided, full disbursement.
@@ -567,7 +567,7 @@ cargo run --bin local_sns -- increase-icp-dissolve-delay [principal] [neuron_id]
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `neuron_id`: Optional. Neuron ID (number). If not provided, shows neuron selection menu.
 - `additional_dissolve_delay_seconds`: Optional. Additional dissolve delay in seconds to add. If not provided, prompts interactively.
 
@@ -585,7 +585,7 @@ cargo run --bin local_sns -- manage-icp-dissolving [principal] [start|stop] [neu
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `start|stop`: Optional. Action to perform. If not provided, shows interactive menu:
   - `[1] Start Dissolving`
   - `[2] Stop Dissolving`
@@ -620,7 +620,7 @@ cargo run --bin local_sns -- get-icp-balance [principal] [subaccount_hex]
 
 **Arguments:**
 
-- `principal`: Optional. Principal to query balance for. If not provided, shows participant selection menu or prompts.
+- `principal`: Optional. Principal to query balance for (owner, participant, or custom). If not provided, shows principal selection menu or prompts.
 - `subaccount_hex`: Optional. Subaccount in hex format. If not provided, uses default account.
 
 ### `get-sns-balance`
@@ -635,7 +635,7 @@ cargo run --bin local_sns -- get-sns-balance [principal] [subaccount_hex]
 
 **Arguments:**
 
-- `principal`: Optional. Principal to query balance for. If not provided, shows participant selection menu or prompts.
+- `principal`: Optional. Principal to query balance for (owner, participant, or custom). If not provided, shows principal selection menu or prompts.
 - `subaccount_hex`: Optional. Subaccount in hex format. If not provided, uses default account.
 
 ### `get-icp-neuron`
@@ -663,12 +663,12 @@ Increase the dissolve delay for an SNS neuron by adding additional seconds.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- increase-sns-dissolve-delay [participant_principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
+cargo run --bin local_sns -- increase-sns-dissolve-delay [principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
 ```
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `neuron_id_hex`: Optional. Neuron ID in hex format. If not provided, shows neuron selection menu.
 - `additional_dissolve_delay_seconds`: Optional. Additional dissolve delay in seconds to add. If not provided, prompts interactively.
 
@@ -681,12 +681,12 @@ Start or stop dissolving for an SNS neuron.
 **Usage:**
 
 ```bash
-cargo run --bin local_sns -- manage-sns-dissolving [participant_principal] [start|stop] [neuron_id_hex]
+cargo run --bin local_sns -- manage-sns-dissolving [principal] [start|stop] [neuron_id_hex]
 ```
 
 **Arguments (all optional - interactive prompts if omitted):**
 
-- `participant_principal`: Optional. Principal of the participant who owns the neuron. If not provided, shows participant selection menu.
+- `principal`: Optional. Principal who owns the neuron (owner, participant, or custom). If not provided, shows principal selection menu.
 - `start|stop`: Optional. Action to perform. If not provided, shows interactive menu:
   - `[1] Start Dissolving`
   - `[2] Stop Dissolving`
@@ -705,6 +705,22 @@ Uses standard NNS canister IDs for local development:
 - **Owner Identity**: Loaded from `~/.config/dfx/identity/default/identity.pem`
 - **Minting Identity**: Hardcoded PEM in `src/core/ops/identity.rs` (used for funding operations)
 - **Participant Identities**: Deterministic seeds saved to `generated/participants/` for reuse
+
+## Principal Selection
+
+When operations require selecting a principal (for both ICP and SNS operations), the interactive menu provides:
+
+1. **Owner Principal** - Listed first with `(owner)` label, showing neuron count
+2. **Participant Principals** - Listed with their neuron counts (e.g., "2 ICP neurons, 1 SNS neuron")
+3. **Custom Principal** - Option to enter any principal directly
+
+All SNS operations support:
+
+- Owner principal (uses dfx identity)
+- Participant principals (uses seed file identities)
+- Custom principals (uses dfx identity as fallback)
+
+This allows flexibility in managing neurons for any principal, not just those in the deployment data.
 
 ## Building
 
@@ -753,7 +769,7 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
 - **`add_sns_hotkey.sh`** - Add hotkey to SNS neuron (interactive)
 
-  - Prompts for participant, neuron, hotkey, and permissions if not provided
+  - Prompts for principal (owner, participant, or custom), neuron, hotkey, and permissions if not provided
 
 - **`add_icp_hotkey.sh`** - Add hotkey to ICP neuron (interactive)
 
@@ -761,11 +777,11 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
 - **`get_sns_neurons.sh`** - List all SNS neurons for a principal (interactive)
 
-  - Shows participant selection menu if principal not provided
+  - Shows principal selection menu (owner, participants, or custom) if principal not provided
 
 - **`get_icp_neurons.sh`** - List all ICP neurons for a principal (interactive)
 
-  - Shows participant selection menu if principal not provided
+  - Shows principal selection menu (owner, participants, or custom) if principal not provided
   - Displays table with neuron details and allows selecting a neuron for full details
 
 - **`get_icp_neuron.sh`** - Get detailed ICP neuron information (interactive)
@@ -829,11 +845,11 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
 - **`increase_sns_dissolve_delay.sh`** - Increase dissolve delay for SNS neuron (interactive)
 
-  - Prompts for participant, neuron selection, and additional dissolve delay if not provided
+  - Prompts for principal (owner, participant, or custom), neuron selection, and additional dissolve delay if not provided
   - Shows neuron selection menu if neuron ID not specified
 
 - **`manage_sns_dissolving.sh`** - Start or stop dissolving for SNS neuron (interactive)
-  - Prompts for participant, action (start/stop), and neuron selection if not provided
+  - Prompts for principal (owner, participant, or custom), action (start/stop), and neuron selection if not provided
   - Shows action menu and neuron selection menu
 
 All scripts can be run with arguments to skip prompts, or without arguments for full interactivity.

@@ -176,7 +176,7 @@ pub async fn add_hotkey_to_participant_neuron(
     permission_types: Option<Vec<i32>>,
     neuron_id: Option<Vec<u8>>,
 ) -> Result<()> {
-    use super::identity::{create_agent, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -188,27 +188,30 @@ pub async fn add_hotkey_to_participant_neuron(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Find participant seed file
-    let participant_data = deployment_data
+    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    let identity = if participant_principal.to_text() == deployment_data.owner_principal {
+        // Owner - use dfx identity
+        load_dfx_identity(None)
+            .context("Failed to load owner dfx identity")?
+    } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
         .find(|p| p.principal == participant_principal.to_string())
-        .with_context(|| {
-            format!(
-                "Participant principal {} not found in deployment data",
-                participant_principal
-            )
-        })?;
-
-    // Load participant identity from seed file
-    let seed_path = PathBuf::from(&participant_data.seed_file);
-    let identity = load_identity_from_seed_file(&seed_path)
-        .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+    {
+        // Participant - load from seed file
+        let seed_path = PathBuf::from(&participant_data.seed_file);
+        load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
+    } else {
+        // Custom principal - try dfx identity as fallback
+        load_dfx_identity(None)
+            .context("Failed to load dfx identity for custom principal")?
+    };
 
     // Create authenticated agent
     let agent = create_agent(identity)
         .await
-        .context("Failed to create agent with participant identity")?;
+        .context("Failed to create agent")?;
 
     // Get governance canister ID
     let governance_canister = deployment_data
@@ -350,7 +353,7 @@ pub async fn disburse_participant_neuron(
     receiver_principal: Principal,
     neuron_id: Option<Vec<u8>>,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -362,27 +365,30 @@ pub async fn disburse_participant_neuron(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Find participant seed file
-    let participant_data = deployment_data
+    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    let identity = if participant_principal.to_text() == deployment_data.owner_principal {
+        // Owner - use dfx identity
+        load_dfx_identity(None)
+            .context("Failed to load owner dfx identity")?
+    } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
         .find(|p| p.principal == participant_principal.to_string())
-        .with_context(|| {
-            format!(
-                "Participant principal {} not found in deployment data",
-                participant_principal
-            )
-        })?;
-
-    // Load participant identity from seed file
-    let seed_path = PathBuf::from(&participant_data.seed_file);
-    let identity = load_identity_from_seed_file(&seed_path)
-        .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+    {
+        // Participant - load from seed file
+        let seed_path = PathBuf::from(&participant_data.seed_file);
+        load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
+    } else {
+        // Custom principal - try dfx identity as fallback
+        load_dfx_identity(None)
+            .context("Failed to load dfx identity for custom principal")?
+    };
 
     // Create authenticated agent
     let agent = create_agent(identity)
         .await
-        .context("Failed to create agent with participant identity")?;
+        .context("Failed to create agent")?;
 
     // Get governance canister ID
     let governance_canister = deployment_data
@@ -569,7 +575,7 @@ pub async fn mint_sns_tokens_with_all_votes(
     receiver_principal: Principal,
     amount_e8s: u64,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -581,22 +587,25 @@ pub async fn mint_sns_tokens_with_all_votes(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Find proposer seed file
-    let proposer_data = deployment_data
+    // Load proposer identity - check if owner first, then participants, then try dfx for custom principals
+    let proposer_identity = if proposer_principal.to_text() == deployment_data.owner_principal {
+        // Owner - use dfx identity
+        load_dfx_identity(None)
+            .context("Failed to load owner dfx identity")?
+    } else if let Some(proposer_data) = deployment_data
         .participants
         .iter()
         .find(|p| p.principal == proposer_principal.to_string())
-        .with_context(|| {
-            format!(
-                "Proposer principal {} not found in deployment data",
-                proposer_principal
-            )
-        })?;
-
-    // Load proposer identity from seed file
-    let seed_path = PathBuf::from(&proposer_data.seed_file);
-    let proposer_identity = load_identity_from_seed_file(&seed_path)
-        .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
+    {
+        // Participant - load from seed file
+        let seed_path = PathBuf::from(&proposer_data.seed_file);
+        load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
+    } else {
+        // Custom principal - try dfx identity as fallback
+        load_dfx_identity(None)
+            .context("Failed to load dfx identity for custom principal")?
+    };
 
     // Create authenticated agent for proposer
     let proposer_agent = create_agent(proposer_identity)
@@ -927,28 +936,29 @@ pub async fn increase_dissolve_delay_participant_neuron_default_path(
         .and_then(|s| Principal::from_text(s).ok())
         .context("Failed to parse governance canister ID from deployment data")?;
 
-    // Try to find principal in deployment data to load identity
-    let agent = if let Some(participant_data) = deployment_data
+    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    use super::identity::load_dfx_identity;
+    let identity = if participant_principal.to_text() == deployment_data.owner_principal {
+        // Owner - use dfx identity
+        load_dfx_identity(None)
+            .context("Failed to load owner dfx identity")?
+    } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
         .find(|p| p.principal == participant_principal.to_string())
     {
-        // Load participant identity
+        // Participant - load from seed file
         let seed_path = PathBuf::from(&participant_data.seed_file);
-        let identity = load_identity_from_seed_file(&seed_path)
-            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
-        create_agent(identity)
-            .await
-            .context("Failed to create agent with participant identity")?
+        load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Try to load as dfx identity
-        use super::identity::load_dfx_identity;
-        let identity =
-            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
-        create_agent(identity)
-            .await
-            .context("Failed to create agent with dfx identity")?
+        // Custom principal - try dfx identity as fallback
+        load_dfx_identity(None)
+            .context("Failed to load dfx identity for custom principal")?
     };
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent")?;
 
     // Determine neuron subaccount
     let neuron_subaccount = if let Some(id) = neuron_id {
@@ -1016,28 +1026,29 @@ pub async fn manage_dissolving_state_participant_neuron_default_path(
         .and_then(|s| Principal::from_text(s).ok())
         .context("Failed to parse governance canister ID from deployment data")?;
 
-    // Try to find principal in deployment data to load identity
-    let agent = if let Some(participant_data) = deployment_data
+    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    use super::identity::load_dfx_identity;
+    let identity = if participant_principal.to_text() == deployment_data.owner_principal {
+        // Owner - use dfx identity
+        load_dfx_identity(None)
+            .context("Failed to load owner dfx identity")?
+    } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
         .find(|p| p.principal == participant_principal.to_string())
     {
-        // Load participant identity
+        // Participant - load from seed file
         let seed_path = PathBuf::from(&participant_data.seed_file);
-        let identity = load_identity_from_seed_file(&seed_path)
-            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?;
-        create_agent(identity)
-            .await
-            .context("Failed to create agent with participant identity")?
+        load_identity_from_seed_file(&seed_path)
+            .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Try to load as dfx identity
-        use super::identity::load_dfx_identity;
-        let identity =
-            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
-        create_agent(identity)
-            .await
-            .context("Failed to create agent with dfx identity")?
+        // Custom principal - try dfx identity as fallback
+        load_dfx_identity(None)
+            .context("Failed to load dfx identity for custom principal")?
     };
+    let agent = create_agent(identity)
+        .await
+        .context("Failed to create agent")?;
 
     // Determine neuron subaccount
     let neuron_subaccount = if let Some(id) = neuron_id {

@@ -133,9 +133,12 @@ show_icp_menu() {
     echo -e "  ${GREEN}8${NC} / [${GREEN}B${NC}]  Get ICP Balance"
     echo -e "     Get ICP ledger balance for an account"
     echo ""
+    echo -e "  ${GREEN}9${NC} / [${GREEN}V${NC}]  Set ICP Neuron Visibility"
+    echo -e "     Set ICP neuron visibility (public/private)"
+    echo ""
     echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
     echo ""
-    echo -n -e "${CYAN}Select operation [0-8, L, C, D, M, H, I, DD, B, or Enter]: ${NC}"
+    echo -n -e "${CYAN}Select operation [0-9, L, C, D, M, H, I, DD, B, V, or Enter]: ${NC}"
 }
 
 # Show ICP submenu (when SNS is NOT deployed)
@@ -265,6 +268,9 @@ run_script() {
                     ;;
                 8|b|B)
                     script_name="get_icp_balance.sh"
+                    ;;
+                9|v|V)
+                    script_name="set_icp_visibility.sh"
                     ;;
                 *)
                     print_error "Invalid ICP operation: $operation"
@@ -455,7 +461,7 @@ main() {
                             0)
                                 break  # Back to main menu
                                 ;;
-                            [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
+                            [1-9]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB]|[vV])
                                 run_script "icp" "$operation_choice"
                                 echo ""
                                 echo -n -e "${CYAN}Press Enter to return to menu...${NC}"

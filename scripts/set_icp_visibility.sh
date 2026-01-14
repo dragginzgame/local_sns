@@ -3,9 +3,11 @@
 # This is a wrapper around the Rust binary's set-icp-visibility command
 #
 # Usage:
-#   bash scripts/set_icp_visibility.sh [true|false]
+#   bash scripts/set_icp_visibility.sh [neuron_id] [true|false]
 #
 # Arguments (all optional - interactive prompts if not provided):
+#   neuron_id  - Optional: Specific neuron ID to set visibility for
+#               If not provided, uses the ICP neuron from SNS deployment data
 #   true|false - Optional: Visibility setting
 #               true  - Set neuron to public (visible to everyone)
 #               false - Set neuron to private (only visible to controller)
@@ -14,13 +16,15 @@
 # Interactive flow:
 #   1. Select visibility option (if not provided)
 #
-# Note: Uses the ICP neuron from the SNS deployment data
+# Note: Defaults to the ICP neuron from the SNS deployment data
 #       (the neuron that was used to create the SNS proposal)
 #
 # Example:
 #   bash scripts/set_icp_visibility.sh
 #   bash scripts/set_icp_visibility.sh true
 #   bash scripts/set_icp_visibility.sh false
+#   bash scripts/set_icp_visibility.sh 12345 true
+#   bash scripts/set_icp_visibility.sh 12345 false
 
 set -euo pipefail
 

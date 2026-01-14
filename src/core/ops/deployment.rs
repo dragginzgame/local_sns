@@ -9,7 +9,7 @@ use std::time::Duration as StdDuration;
 
 use crate::core::declarations::icp_ledger::Account as LedgerAccount;
 use crate::core::declarations::sns_swap::GetLifecycleResponse;
-use crate::core::ops::governance_ops::{claim_neuron, create_sns_proposal, set_dissolve_delay};
+use crate::core::ops::governance_ops::{claim_neuron, create_sns_proposal, set_dissolve_delay, set_neuron_visibility};
 use crate::core::ops::identity::{create_agent, load_dfx_identity, load_minting_identity};
 use crate::core::ops::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
 use crate::core::ops::snsw_ops::get_deployed_sns;
@@ -141,6 +141,19 @@ pub async fn configure_neuron(ctx: &DeploymentContext, neuron_id: u64) -> Result
     .await
     .context("Failed to set dissolve delay")?;
     print_success("Dissolve delay set");
+    
+    print_header("Setting Neuron Visibility");
+    print_step("Setting neuron visibility to public...");
+    set_neuron_visibility(
+        &ctx.agent,
+        ctx.governance_canister,
+        neuron_id,
+        true, // public
+    )
+    .await
+    .context("Failed to set neuron visibility")?;
+    print_success("Neuron visibility set to public");
+    
     Ok(())
 }
 
