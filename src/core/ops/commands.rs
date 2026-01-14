@@ -3,6 +3,7 @@
 use anyhow::{Context, Result};
 use candid::Principal;
 use hex;
+use std::io::{self, Write};
 
 use crate::core::ops::governance_ops::{
     create_icp_neuron_default_path, get_icp_neuron_default_path,
@@ -38,7 +39,6 @@ fn select_participant_or_custom_with_label_and_counts_sync(
     label: Option<&str>,
 ) -> Result<Principal> {
     use crate::core::utils::data_output::SnsCreationData;
-    use std::io::{self, Write};
 
     // Try to read deployment data
     let deployment_path = crate::core::utils::data_output::get_output_path();
@@ -65,20 +65,25 @@ fn select_participant_or_custom_with_label_and_counts_sync(
                     owner_option, deployment_data.owner_principal
                 );
                 println!("  [{}] Enter custom principal", custom_option);
+                println!("  [{}] Go back to main menu", custom_option + 1);
                 println!();
                 print!(
-                    "Select option number (1-{}) or enter principal: ",
-                    custom_option
+                    "Select option number (1-{}), press Enter/[b]ack to go back, or enter principal: ",
+                    custom_option + 1
                 );
                 io::stdout().flush()?;
 
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
                 let input_trimmed = input.trim();
+                let input_trimmed_lower = input_trimmed.to_lowercase();
 
-                // If input is empty, treat as invalid
-                if input_trimmed.is_empty() {
-                    anyhow::bail!("No input provided. Please enter a number or principal.");
+                // Check for navigation commands
+                if input_trimmed_lower == "b"
+                    || input_trimmed_lower == "back"
+                    || input_trimmed.is_empty()
+                {
+                    anyhow::bail!("User went to main menu");
                 }
 
                 // Check if input looks like a principal (contains dashes, typical format)
@@ -102,24 +107,24 @@ fn select_participant_or_custom_with_label_and_counts_sync(
                 // Try to parse as number
                 match input_trimmed.parse::<usize>() {
                     Ok(selection) => {
+                        if selection == custom_option + 1 {
+                            // Go back to main menu option
+                            anyhow::bail!("User went to main menu");
+                        }
                         if selection < 1 || selection > custom_option {
                             anyhow::bail!(
                                 "Invalid selection. Please choose a number between 1 and {}",
-                                custom_option
+                                custom_option + 1
                             );
                         }
 
                         if selection == custom_option {
                             // Custom principal option
-                            print!("Enter principal: ");
-                            io::stdout().flush()?;
-                            let mut principal_input = String::new();
-                            io::stdin().read_line(&mut principal_input)?;
-                            let principal_trimmed = principal_input.trim();
-                            if principal_trimmed.is_empty() {
-                                anyhow::bail!("No principal provided.");
-                            }
-                            Principal::from_text(principal_trimmed)
+                            let principal_input = read_input_required(
+                                "Enter principal (or press Enter/[b]ack to go back): ",
+                            )
+                            .map_err(navigation_to_anyhow)?;
+                            Principal::from_text(&principal_input)
                                 .context("Failed to parse principal")
                         } else if selection == owner_option {
                             // Owner (SNS proposer)
@@ -187,7 +192,6 @@ async fn select_participant_or_custom_with_label_and_counts(
     neuron_type: Option<&str>,
 ) -> Result<Principal> {
     use crate::core::utils::data_output::SnsCreationData;
-    use std::io::{self, Write};
 
     // Try to read deployment data
     let deployment_path = crate::core::utils::data_output::get_output_path();
@@ -300,20 +304,25 @@ async fn select_participant_or_custom_with_label_and_counts(
                     );
                 }
                 println!("  [{}] Enter custom principal", custom_option);
+                println!("  [{}] Go back to main menu", custom_option + 1);
                 println!();
                 print!(
-                    "Select option number (1-{}) or enter principal: ",
-                    custom_option
+                    "Select option number (1-{}), press Enter/[b]ack to go back, or enter principal: ",
+                    custom_option + 1
                 );
                 io::stdout().flush()?;
 
                 let mut input = String::new();
                 io::stdin().read_line(&mut input)?;
+                let input_trimmed_lower = input.trim().to_lowercase();
                 let input_trimmed = input.trim();
 
-                // If input is empty, treat as invalid
-                if input_trimmed.is_empty() {
-                    anyhow::bail!("No input provided. Please enter a number or principal.");
+                // Check for navigation commands
+                if input_trimmed_lower == "b"
+                    || input_trimmed_lower == "back"
+                    || input_trimmed.is_empty()
+                {
+                    anyhow::bail!("User went to main menu");
                 }
 
                 // Check if input looks like a principal (contains dashes, typical format)
@@ -337,24 +346,24 @@ async fn select_participant_or_custom_with_label_and_counts(
                 // Try to parse as number
                 match input_trimmed.parse::<usize>() {
                     Ok(selection) => {
+                        if selection == custom_option + 1 {
+                            // Go back to main menu option
+                            anyhow::bail!("User went to main menu");
+                        }
                         if selection < 1 || selection > custom_option {
                             anyhow::bail!(
                                 "Invalid selection. Please choose a number between 1 and {}",
-                                custom_option
+                                custom_option + 1
                             );
                         }
 
                         if selection == custom_option {
                             // Custom principal option
-                            print!("Enter principal: ");
-                            io::stdout().flush()?;
-                            let mut principal_input = String::new();
-                            io::stdin().read_line(&mut principal_input)?;
-                            let principal_trimmed = principal_input.trim();
-                            if principal_trimmed.is_empty() {
-                                anyhow::bail!("No principal provided.");
-                            }
-                            Principal::from_text(principal_trimmed)
+                            let principal_input = read_input_required(
+                                "Enter principal (or press Enter/[b]ack to go back): ",
+                            )
+                            .map_err(navigation_to_anyhow)?;
+                            Principal::from_text(&principal_input)
                                 .context("Failed to parse principal")
                         } else if selection == owner_option {
                             // Owner (SNS proposer)
@@ -414,15 +423,119 @@ async fn select_participant_or_custom_with_label_and_counts(
     }
 }
 
-/// Check if an error is a "User cancelled" error
+/// Check if an error is a navigation error (go back or go to main menu)
+fn is_navigation_error(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<UserNavigation>().is_some()
+        || err.to_string().contains("User went back")
+        || err.to_string().contains("User went to main menu")
+        || err.to_string().contains("User cancelled")
+}
+
+/// Check if an error is a "User cancelled" error (for backward compatibility)
 fn is_user_cancelled_error(err: &anyhow::Error) -> bool {
-    err.to_string().contains("User cancelled")
+    is_navigation_error(err)
+}
+
+/// Check if an error is a "User went back" error (for backward compatibility)
+fn is_user_went_back_error(err: &anyhow::Error) -> bool {
+    is_navigation_error(err)
+}
+
+/// Helper to select participant with error handling for "went back"
+async fn select_participant_with_back_handling(
+    label: Option<&str>,
+    neuron_type: Option<&str>,
+) -> Result<Principal> {
+    select_participant_or_custom_with_label_and_counts(label, neuron_type)
+        .await
+        .map_err(|e| {
+            if is_user_went_back_error(&e) {
+                anyhow::anyhow!("User went back")
+            } else {
+                e
+            }
+        })
+}
+
+/// Unified error type for user navigation
+#[derive(Debug)]
+pub enum UserNavigation {
+    GoBack,
+    GoToMainMenu,
+}
+
+impl std::fmt::Display for UserNavigation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserNavigation::GoBack => write!(f, "User went back"),
+            UserNavigation::GoToMainMenu => write!(f, "User went to main menu"),
+        }
+    }
+}
+
+impl std::error::Error for UserNavigation {}
+
+/// Helper to read input with navigation support
+/// Returns Ok(Some(String)) if input is valid, Ok(None) if empty input is allowed
+/// Returns Err(UserNavigation::GoToMainMenu) if Enter is pressed (empty input) or "b"/"back" is entered
+/// Returns Err(UserNavigation::GoBack) if "b"/"back" is entered (for multi-step flows)
+fn read_input_with_navigation(
+    prompt: &str,
+    allow_empty: bool,
+) -> Result<Option<String>, UserNavigation> {
+    print!("{}", prompt);
+    if let Err(_) = io::stdout().flush() {
+        return Err(UserNavigation::GoToMainMenu);
+    }
+    let mut input = String::new();
+    if let Err(_) = io::stdin().read_line(&mut input) {
+        return Err(UserNavigation::GoToMainMenu);
+    }
+    let input_trimmed = input.trim().to_lowercase();
+
+    // Check for navigation commands
+    if input_trimmed == "b" || input_trimmed == "back" {
+        return Err(UserNavigation::GoBack);
+    }
+
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        if allow_empty {
+            Ok(None)
+        } else {
+            // Empty input when not allowed means go to main menu
+            Err(UserNavigation::GoToMainMenu)
+        }
+    } else {
+        Ok(Some(trimmed.to_string()))
+    }
+}
+
+/// Helper to read input with navigation support (non-empty required)
+/// Returns Ok(String) if input is valid
+/// Returns Err(UserNavigation::GoToMainMenu) if Enter is pressed or "b"/"back" is entered
+fn read_input_required(prompt: &str) -> Result<String, UserNavigation> {
+    match read_input_with_navigation(prompt, false)? {
+        Some(s) => Ok(s),
+        None => Err(UserNavigation::GoToMainMenu),
+    }
+}
+
+/// Helper to read input with navigation support (empty allowed)
+/// Returns Ok(Some(String)) if input is valid, Ok(None) if empty
+/// Returns Err(UserNavigation::GoBack) if "b"/"back" is entered
+fn read_input_optional(prompt: &str) -> Result<Option<String>, UserNavigation> {
+    read_input_with_navigation(prompt, true)
+}
+
+/// Convert navigation error to anyhow error
+fn navigation_to_anyhow(nav: UserNavigation) -> anyhow::Error {
+    anyhow::anyhow!("{}", nav)
 }
 
 /// Helper function to select a neuron interactively for a given principal
 async fn select_neuron(principal: Principal) -> Result<Vec<u8>> {
     use crate::core::ops::sns_governance_ops::list_neurons_for_principal_default_path;
-    use std::io::{self, Write};
 
     print_header("Select SNS Neuron");
     print_info(&format!("Principal: {}", principal));
@@ -440,11 +553,9 @@ async fn select_neuron(principal: Principal) -> Result<Vec<u8>> {
         println!("  1. Create an SNS neuron first using 'create-sns-neuron'");
         println!("  2. Select a different principal that has SNS neurons");
         println!();
-        print!("Press Enter to go back... ");
-        io::stdout().flush()?;
-        let mut _input = String::new();
-        io::stdin().read_line(&mut _input)?;
-        anyhow::bail!("User cancelled: Principal {} has no SNS neurons", principal);
+        let _ = read_input_required("Press Enter to go back to main menu: ")
+            .map_err(navigation_to_anyhow);
+        anyhow::bail!("User went to main menu");
     }
 
     print_success(&format!("Found {} neuron(s)", neurons.len()));
@@ -523,12 +634,15 @@ async fn select_neuron(principal: Principal) -> Result<Vec<u8>> {
 
     println!("{:-<100}", "");
     println!();
-    print!("Select neuron number (1-{}): ", neurons.len());
-    io::stdout().flush()?;
+    let input = read_input_required(&format!(
+        "Select neuron number (1-{}) or press Enter/[b]ack to go back: ",
+        neurons.len()
+    ))
+    .map_err(navigation_to_anyhow)?;
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    let selection: usize = input.trim().parse().context("Invalid selection")?;
+    let selection: usize = input
+        .parse()
+        .context("Invalid selection - must be a number")?;
 
     if selection < 1 || selection > neurons.len() {
         anyhow::bail!(
@@ -547,8 +661,6 @@ async fn select_neuron(principal: Principal) -> Result<Vec<u8>> {
 
 /// Handle add-hotkey command
 pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     if args.len() < 3 {
         print_add_hotkey_usage(&args[0]);
         std::process::exit(1);
@@ -562,7 +674,11 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
             let owner_principal = if args.len() >= 4 {
                 Principal::from_text(&args[3]).context("Failed to parse owner principal")?
             } else {
-                select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+                match select_participant_with_back_handling(None, Some("sns")).await {
+                    Ok(p) => p,
+                    Err(e) if is_user_went_back_error(&e) => return Ok(()),
+                    Err(e) => return Err(e),
+                }
             };
 
             // Step 2: Get neuron_id and hotkey_principal
@@ -587,12 +703,11 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                         Principal::from_text(&args[5])
                             .context("Failed to parse hotkey principal")?
                     } else {
-                        print!("Enter hotkey principal: ");
-                        io::stdout().flush()?;
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input)?;
-                        Principal::from_text(input.trim())
-                            .context("Failed to parse hotkey principal")?
+                        let input = read_input_required(
+                            "Enter hotkey principal (or press Enter/[b]ack to go back): ",
+                        )
+                        .map_err(navigation_to_anyhow)?;
+                        Principal::from_text(&input).context("Failed to parse hotkey principal")?
                     };
 
                     // Check for permissions
@@ -619,7 +734,9 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                         Principal::from_text(arg4).context("Failed to parse hotkey principal")?;
                     let neuron_id_val = match select_neuron(owner_principal).await {
                         Ok(id) => id,
-                        Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+                        Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => {
+                            return Ok(());
+                        }
                         Err(e) => return Err(e),
                     };
 
@@ -696,13 +813,21 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                 let arg3 = &args[3];
                 if arg3.parse::<u64>().is_ok() {
                     // arg3 is neuron_id, need to get principal
-                    select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+                    match select_participant_with_back_handling(None, Some("icp")).await {
+                        Ok(p) => p,
+                        Err(e) if is_user_went_back_error(&e) => return Ok(()),
+                        Err(e) => return Err(e),
+                    }
                 } else {
                     // arg3 is principal
                     Principal::from_text(arg3).context("Failed to parse principal")?
                 }
             } else {
-                select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+                match select_participant_with_back_handling(None, Some("icp")).await {
+                    Ok(p) => p,
+                    Err(e) if is_user_went_back_error(&e) => return Ok(()),
+                    Err(e) => return Err(e),
+                }
             };
 
             // Step 2: Get neuron_id and hotkey_principal
@@ -719,12 +844,11 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                         Principal::from_text(&args[4])
                             .context("Failed to parse hotkey principal")?
                     } else {
-                        print!("Enter hotkey principal: ");
-                        io::stdout().flush()?;
-                        let mut input = String::new();
-                        io::stdin().read_line(&mut input)?;
-                        Principal::from_text(input.trim())
-                            .context("Failed to parse hotkey principal")?
+                        let input = read_input_required(
+                            "Enter hotkey principal (or press Enter/[b]ack to go back): ",
+                        )
+                        .map_err(navigation_to_anyhow)?;
+                        Principal::from_text(&input).context("Failed to parse hotkey principal")?
                     };
 
                     (neuron_id_val, hotkey)
@@ -734,7 +858,9 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                         Principal::from_text(arg3).context("Failed to parse hotkey principal")?;
                     let neuron_id_val = match select_icp_neuron(principal).await {
                         Ok(id) => id,
-                        Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+                        Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => {
+                            return Ok(());
+                        }
                         Err(e) => return Err(e),
                     };
                     (neuron_id_val, hotkey)
@@ -825,11 +951,13 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
 
 /// Handle list-sns-neurons command
 pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     let principal = if args.len() < 3 {
         // No principal provided - show participant selection or custom (includes owner)
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     } else {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     };
@@ -1117,8 +1245,6 @@ fn display_neuron_details(neuron: &crate::core::declarations::sns_governance::Ne
 
 /// Handle set-icp-visibility command
 pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         // Check if arg2 is a principal or neuron_id
@@ -1144,7 +1270,9 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
             // arg2 is principal, need to select neuron
             match select_icp_neuron(principal).await {
                 Ok(id) => Some(id),
-                Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+                Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => {
+                    return Ok(());
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -1166,7 +1294,7 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
             _ => {
                 eprintln!("Error: Invalid visibility value: {}", args[3]);
                 eprintln!("Use 'true' or 'false'");
-                std::process::exit(1);
+                anyhow::bail!("Invalid visibility value");
             }
         }
     } else {
@@ -1257,8 +1385,6 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
 
 /// Handle get-icp-neuron command
 pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Get neuron ID (interactive if not provided)
     let neuron_id = if args.len() > 2 {
         Some(
@@ -1343,8 +1469,6 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
 
 /// Handle mint-icp command
 pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get receiver principal (select participant or custom if not provided)
     let receiver_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse receiver principal")?
@@ -1372,12 +1496,11 @@ pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
             minting_balance, minting_balance_icp
         ));
         println!();
-        print!("Enter amount in e8s (e.g., 100000000 for 1 ICP): ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        let input = read_input_required(
+            "Enter amount in e8s (e.g., 100000000 for 1 ICP, or press Enter/[b]ack to go back): ",
+        )
+        .map_err(navigation_to_anyhow)?;
         input
-            .trim()
             .parse::<u64>()
             .context("Failed to parse amount - must be a number")?
     };
@@ -1407,13 +1530,15 @@ pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
 
 /// Handle create-icp-neuron command
 pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+        match select_participant_with_back_handling(None, Some("icp")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Get ICP balance for the principal to show available amount
@@ -1464,14 +1589,19 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
             ));
         }
         println!();
-        print!(
-            "Enter amount in e8s to stake (e.g., 100000000 for 1 ICP, or press Enter to use all available): "
-        );
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-        if input.is_empty() {
+        let input_opt = match read_input_optional(
+            "Enter amount in e8s to stake (e.g., 100000000 for 1 ICP, press Enter to use all available, or [b]ack to go back): ",
+        ) {
+            Ok(opt) => opt,
+            Err(nav) => {
+                return Err(navigation_to_anyhow(nav));
+            }
+        };
+        if let Some(input) = input_opt {
+            input
+                .parse::<u64>()
+                .context("Failed to parse amount - must be a number")?
+        } else {
             // Use all available balance after fee
             if available_after_fee == 0 {
                 anyhow::bail!(
@@ -1480,10 +1610,6 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
                 );
             }
             available_after_fee
-        } else {
-            input
-                .parse::<u64>()
-                .context("Failed to parse amount - must be a number")?
         }
     };
 
@@ -1506,17 +1632,21 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
         print!("Enter dissolve delay in seconds (or press Enter to skip, default: 0): ");
         io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.is_empty() {
-            None // No dissolve delay
-        } else {
-            let delay: u64 = input
+        let input_opt = match read_input_optional(
+            "Enter dissolve delay in seconds (press Enter to skip/default: 0, or [b]ack to go back): ",
+        ) {
+            Ok(opt) => opt,
+            Err(nav) => {
+                return Err(navigation_to_anyhow(nav));
+            }
+        };
+        if let Some(input_trimmed) = input_opt {
+            let delay: u64 = input_trimmed
                 .parse()
                 .context("Failed to parse dissolve delay - must be a number")?;
             if delay > 0 { Some(delay) } else { None }
+        } else {
+            None // No dissolve delay
         }
     };
 
@@ -1583,13 +1713,15 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
 
 /// Handle list-icp-neurons command
 pub async fn handle_list_icp_neurons(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+        match select_participant_with_back_handling(None, Some("icp")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     print_header("Listing ICP Neurons");
@@ -1807,7 +1939,11 @@ pub async fn handle_get_icp_balance(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+        match select_participant_with_back_handling(None, Some("icp")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2: Get subaccount (optional)
@@ -1877,7 +2013,11 @@ pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2: Get subaccount (optional)
@@ -1928,8 +2068,6 @@ pub async fn handle_get_sns_balance(args: &[String]) -> Result<()> {
 
 /// Handle mint-sns-tokens command
 pub async fn handle_mint_sns_tokens(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get proposer principal (select participant or custom if not provided)
     let proposer_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse proposer principal")?
@@ -2024,7 +2162,11 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Get balance and fee to show user options
@@ -2044,7 +2186,6 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
         .context("Failed to get SNS ledger transfer fee")?;
 
     // Step 2: Get optional amount (interactive if not provided)
-    use std::io::{self, Write};
     let amount_e8s = if args.len() >= 4 {
         Some(
             args[3]
@@ -2070,17 +2211,22 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
             ));
         }
         println!();
-        print!(
-            "Enter amount to stake in e8s (or press Enter to use maximum: {} e8s): ",
+        let input_opt = match read_input_optional(&format!(
+            "Enter amount to stake in e8s (press Enter to use maximum: {} e8s, or [b]ack to go back): ",
             max_available
-        );
-        io::stdout().flush()?;
+        )) {
+            Ok(opt) => opt,
+            Err(nav) => {
+                return Err(navigation_to_anyhow(nav));
+            }
+        };
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.is_empty() {
+        if let Some(input) = input_opt {
+            let amount: u64 = input
+                .parse()
+                .context("Failed to parse amount - must be a number")?;
+            Some(amount)
+        } else {
             // Use maximum available
             if max_available < minimum_stake {
                 anyhow::bail!(
@@ -2090,11 +2236,6 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
                 );
             }
             None // Will be handled in create_sns_neuron as "all available"
-        } else {
-            let amount: u64 = input
-                .parse()
-                .context("Failed to parse amount - must be a number")?;
-            Some(amount)
         }
     };
 
@@ -2117,17 +2258,21 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
         print!("Enter dissolve delay in seconds (or press Enter to skip, default: 0): ");
         io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.is_empty() {
-            None // No dissolve delay
-        } else {
-            let delay: u64 = input
+        let input_opt = match read_input_optional(
+            "Enter dissolve delay in seconds (press Enter to skip/default: 0, or [b]ack to go back): ",
+        ) {
+            Ok(opt) => opt,
+            Err(nav) => {
+                return Err(navigation_to_anyhow(nav));
+            }
+        };
+        if let Some(input_trimmed) = input_opt {
+            let delay: u64 = input_trimmed
                 .parse()
                 .context("Failed to parse dissolve delay - must be a number")?;
             if delay > 0 { Some(delay) } else { None }
+        } else {
+            None // No dissolve delay
         }
     };
 
@@ -2187,13 +2332,15 @@ pub async fn handle_create_sns_neuron(args: &[String]) -> Result<()> {
 
 /// Handle disburse-sns-neuron command
 pub async fn handle_disburse_sns_neuron(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get participant principal (select if not provided)
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2 & 3: Get neuron_id and receiver_principal
@@ -2215,11 +2362,11 @@ pub async fn handle_disburse_sns_neuron(args: &[String]) -> Result<()> {
             let receiver = if args.len() >= 5 {
                 Principal::from_text(&args[4]).context("Failed to parse receiver principal")?
             } else {
-                print!("Enter receiver principal: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+                let input = read_input_required(
+                    "Enter receiver principal (or press Enter/[b]ack to go back): ",
+                )
+                .map_err(navigation_to_anyhow)?;
+                Principal::from_text(&input).context("Failed to parse receiver principal")?
             };
 
             (neuron_id_val, receiver)
@@ -2229,7 +2376,9 @@ pub async fn handle_disburse_sns_neuron(args: &[String]) -> Result<()> {
                 Principal::from_text(arg3).context("Failed to parse receiver principal")?;
             let neuron_id_val = match select_neuron(participant_principal).await {
                 Ok(id) => id,
-                Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+                Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => {
+                    return Ok(());
+                }
                 Err(e) => return Err(e),
             };
             (Some(neuron_id_val), receiver)
@@ -2335,13 +2484,15 @@ fn print_add_hotkey_usage(program_name: &str) {
 
 /// Handle increase-sns-dissolve-delay command
 pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get participant principal (select participant or custom if not provided)
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2: Get neuron ID (select if not provided)
@@ -2352,7 +2503,7 @@ pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
         // Interactive neuron selection
         match select_neuron(participant_principal).await {
             Ok(id) => Some(id),
-            Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+            Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => return Ok(()),
             Err(e) => return Err(e),
         }
     };
@@ -2379,13 +2530,10 @@ pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
             }
         }
         println!();
-        print!("Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days): ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        let input = read_input_required(
+            "Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days, or press Enter/[b]ack to go back): ",
+        ).map_err(navigation_to_anyhow)?;
         input
-            .trim()
             .parse::<u64>()
             .context("Failed to parse dissolve delay - must be a number")?
     };
@@ -2425,13 +2573,15 @@ pub async fn handle_increase_sns_dissolve_delay(args: &[String]) -> Result<()> {
 
 /// Handle manage-sns-dissolving command
 pub async fn handle_manage_sns_dissolving(args: &[String]) -> Result<()> {
-    use std::io::{self, Write};
-
     // Step 1: Get participant principal (select if not provided)
     let participant_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse participant principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("sns")).await?
+        match select_participant_with_back_handling(None, Some("sns")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2: Get action (start/stop) - interactive if not provided
@@ -2476,7 +2626,7 @@ pub async fn handle_manage_sns_dissolving(args: &[String]) -> Result<()> {
         // Interactive neuron selection
         match select_neuron(participant_principal).await {
             Ok(id) => Some(id),
-            Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+            Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => return Ok(()),
             Err(e) => return Err(e),
         }
     };
@@ -2535,7 +2685,6 @@ pub async fn handle_check_sns_deployed(_args: &[String]) -> Result<()> {
 /// Select an ICP neuron interactively from a list
 async fn select_icp_neuron(principal: Principal) -> Result<u64> {
     use crate::core::ops::governance_ops::list_icp_neurons_for_principal_default_path;
-    use std::io::{self, Write};
 
     print_header("Select ICP Neuron");
     print_info(&format!("Principal: {}", principal));
@@ -2553,11 +2702,9 @@ async fn select_icp_neuron(principal: Principal) -> Result<u64> {
         println!("  1. Create an ICP neuron first using 'create-icp-neuron'");
         println!("  2. Select a different principal that has ICP neurons");
         println!();
-        print!("Press Enter to go back... ");
-        io::stdout().flush()?;
-        let mut _input = String::new();
-        io::stdin().read_line(&mut _input)?;
-        anyhow::bail!("User cancelled: Principal {} has no ICP neurons", principal);
+        let _ = read_input_required("Press Enter to go back to main menu: ")
+            .map_err(navigation_to_anyhow);
+        anyhow::bail!("User went to main menu");
     }
 
     print_success(&format!("Found {} neuron(s)", neurons.len()));
@@ -2621,12 +2768,13 @@ async fn select_icp_neuron(principal: Principal) -> Result<u64> {
     println!("{:-<100}", "");
     println!();
 
-    print!("Select neuron number (1-{}): ", neurons.len());
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    let input = read_input_required(&format!(
+        "Select neuron number (1-{}) or press Enter/[b]ack to go back: ",
+        neurons.len()
+    ))
+    .map_err(navigation_to_anyhow)?;
+
     let selection: usize = input
-        .trim()
         .parse()
         .context("Invalid selection - must be a number")?;
 
@@ -2648,13 +2796,16 @@ async fn select_icp_neuron(principal: Principal) -> Result<u64> {
 /// Handle disburse-icp-neuron command
 pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
     use crate::core::ops::governance_ops::disburse_icp_neuron_for_principal_default_path;
-    use std::io::{self, Write};
 
     // Step 1: Get principal (select participant or custom if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        select_participant_or_custom_with_label_and_counts(None, Some("icp")).await?
+        match select_participant_with_back_handling(None, Some("icp")).await {
+            Ok(p) => p,
+            Err(e) if is_user_went_back_error(&e) => return Ok(()),
+            Err(e) => return Err(e),
+        }
     };
 
     // Step 2 & 3: Get neuron_id and receiver_principal
@@ -2669,11 +2820,11 @@ pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
             let receiver = if args.len() >= 5 {
                 Principal::from_text(&args[4]).context("Failed to parse receiver principal")?
             } else {
-                print!("Enter receiver principal: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+                let input = read_input_required(
+                    "Enter receiver principal (or press Enter/[b]ack to go back): ",
+                )
+                .map_err(navigation_to_anyhow)?;
+                Principal::from_text(&input).context("Failed to parse receiver principal")?
             };
 
             (neuron_id_val, receiver)
@@ -2683,7 +2834,9 @@ pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
                 Principal::from_text(arg3).context("Failed to parse receiver principal")?;
             let neuron_id_val = match select_icp_neuron(principal).await {
                 Ok(id) => Some(id),
-                Err(e) if is_user_cancelled_error(&e) => return Ok(()),
+                Err(e) if is_user_cancelled_error(&e) || is_user_went_back_error(&e) => {
+                    return Ok(());
+                }
                 Err(e) => return Err(e),
             };
             (neuron_id_val, receiver)
@@ -2748,7 +2901,6 @@ pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
 /// Handle increase-icp-dissolve-delay command
 pub async fn handle_increase_icp_dissolve_delay(args: &[String]) -> Result<()> {
     use crate::core::ops::governance_ops::increase_icp_dissolve_delay_for_principal_default_path;
-    use std::io::{self, Write};
 
     // Step 1: Get principal (select participant if not provided)
     let principal = if args.len() >= 3 {
@@ -2786,13 +2938,10 @@ pub async fn handle_increase_icp_dissolve_delay(args: &[String]) -> Result<()> {
             print_info(&format!("Neuron ID: {}", id));
         }
         println!();
-        print!("Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days): ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        let input = read_input_required(
+            "Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days, or press Enter/[b]ack to go back): ",
+        ).map_err(navigation_to_anyhow)?;
         input
-            .trim()
             .parse::<u64>()
             .context("Failed to parse dissolve delay - must be a number")?
     };
@@ -2824,7 +2973,6 @@ pub async fn handle_increase_icp_dissolve_delay(args: &[String]) -> Result<()> {
 /// Handle manage-icp-dissolving command
 pub async fn handle_manage_icp_dissolving(args: &[String]) -> Result<()> {
     use crate::core::ops::governance_ops::manage_icp_dissolving_state_for_principal_default_path;
-    use std::io::{self, Write};
 
     // Step 1: Get principal (select participant if not provided)
     let principal = if args.len() >= 3 {

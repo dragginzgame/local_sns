@@ -14,6 +14,13 @@ use core::ops::commands::{
 };
 use core::ops::deployment::deploy_sns;
 
+// Helper to check if error is a navigation error (user went back or to main menu)
+fn is_navigation_error(err: &anyhow::Error) -> bool {
+    err.to_string().contains("User went back")
+        || err.to_string().contains("User went to main menu")
+        || err.to_string().contains("User cancelled")
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments
@@ -21,30 +28,26 @@ async fn main() -> Result<()> {
 
     // Handle CLI commands
     if args.len() > 1 {
-        match args[1].as_str() {
-            "deploy-sns" => return deploy_sns().await,
-            "add-hotkey" => return handle_add_hotkey(&args).await,
-            "list-sns-neurons" => return handle_list_neurons(&args).await,
-            "list-icp-neurons" => return handle_list_icp_neurons(&args).await,
-            "mint-sns-tokens" => return handle_mint_sns_tokens(&args).await,
-            "create-sns-neuron" => return handle_create_sns_neuron(&args).await,
-            "disburse-sns-neuron" => return handle_disburse_sns_neuron(&args).await,
-            "disburse-icp-neuron" => return handle_disburse_icp_neuron(&args).await,
-            "increase-sns-dissolve-delay" => {
-                return handle_increase_sns_dissolve_delay(&args).await;
-            }
-            "increase-icp-dissolve-delay" => {
-                return handle_increase_icp_dissolve_delay(&args).await;
-            }
-            "manage-sns-dissolving" => return handle_manage_sns_dissolving(&args).await,
-            "manage-icp-dissolving" => return handle_manage_icp_dissolving(&args).await,
-            "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
-            "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
-            "get-icp-balance" => return handle_get_icp_balance(&args).await,
-            "get-sns-balance" => return handle_get_sns_balance(&args).await,
-            "mint-icp" => return handle_mint_icp(&args).await,
-            "create-icp-neuron" => return handle_create_icp_neuron(&args).await,
-            "check-sns-deployed" => return handle_check_sns_deployed(&args).await,
+        let result = match args[1].as_str() {
+            "deploy-sns" => deploy_sns().await,
+            "add-hotkey" => handle_add_hotkey(&args).await,
+            "list-sns-neurons" => handle_list_neurons(&args).await,
+            "list-icp-neurons" => handle_list_icp_neurons(&args).await,
+            "mint-sns-tokens" => handle_mint_sns_tokens(&args).await,
+            "create-sns-neuron" => handle_create_sns_neuron(&args).await,
+            "disburse-sns-neuron" => handle_disburse_sns_neuron(&args).await,
+            "disburse-icp-neuron" => handle_disburse_icp_neuron(&args).await,
+            "increase-sns-dissolve-delay" => handle_increase_sns_dissolve_delay(&args).await,
+            "increase-icp-dissolve-delay" => handle_increase_icp_dissolve_delay(&args).await,
+            "manage-sns-dissolving" => handle_manage_sns_dissolving(&args).await,
+            "manage-icp-dissolving" => handle_manage_icp_dissolving(&args).await,
+            "set-icp-visibility" => handle_set_icp_visibility(&args).await,
+            "get-icp-neuron" => handle_get_icp_neuron(&args).await,
+            "get-icp-balance" => handle_get_icp_balance(&args).await,
+            "get-sns-balance" => handle_get_sns_balance(&args).await,
+            "mint-icp" => handle_mint_icp(&args).await,
+            "create-icp-neuron" => handle_create_icp_neuron(&args).await,
+            "check-sns-deployed" => handle_check_sns_deployed(&args).await,
             _ => {
                 eprintln!("Unknown command: {}", args[1]);
                 eprintln!("\nAvailable commands:");
@@ -74,11 +77,18 @@ async fn main() -> Result<()> {
                 eprintln!("  get-sns-balance          - Get SNS ledger balance for an account");
                 eprintln!("  mint-icp                 - Mint ICP tokens from minting account");
                 eprintln!("  create-icp-neuron        - Create an ICP neuron by staking ICP");
-                std::process::exit(1);
+                return Err(anyhow::anyhow!("Unknown command"));
             }
-        }
-    }
+        };
 
-    // Default behavior: deploy SNS if no arguments
-    deploy_sns().await
+        // If result is a navigation error, return Ok(()) to gracefully exit
+        match result {
+            Ok(()) => Ok(()),
+            Err(e) if is_navigation_error(&e) => Ok(()),
+            Err(e) => Err(e),
+        }
+    } else {
+        // Default behavior: deploy SNS if no arguments
+        deploy_sns().await
+    }
 }
