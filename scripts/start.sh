@@ -220,7 +220,11 @@ run_script() {
     local category="$1"
     local operation="$2"
     shift 2 || true
-    local script_args=("$@")
+    # Initialize script_args array - use explicit empty array if no args to avoid unbound variable errors
+    local script_args=()
+    if [ $# -gt 0 ]; then
+        script_args=("$@")
+    fi
     local script_name=""
     
     # Check if this operation requires SNS deployment
@@ -336,7 +340,12 @@ run_script() {
         
         # Run the script with any passed arguments
         print_header "Running: $script_name"
-        bash "$script_path" "${script_args[@]}"
+        # script_args is always initialized, but check length to avoid issues with set -u
+        if [ ${#script_args[@]} -eq 0 ]; then
+            bash "$script_path"
+        else
+            bash "$script_path" "${script_args[@]}"
+        fi
     fi
     
     return $?
