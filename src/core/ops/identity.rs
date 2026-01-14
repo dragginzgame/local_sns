@@ -75,7 +75,7 @@ pub fn load_minting_identity() -> Result<Box<dyn Identity>> {
 /// 1. DFX_REPLICA_URL environment variable
 /// 2. DFX_REPLICA_PORT environment variable (constructs URL)
 /// 3. ~/.config/dfx/networks.json (reads bind address for network specified by DFX_NETWORK, or "local")
-/// 4. Default: http://127.0.0.1:8080
+/// 4. Default: http://127.0.0.1:4943
 fn get_dfx_replica_url() -> String {
     // Check environment variables first
     if let Ok(url) = std::env::var("DFX_REPLICA_URL") {
@@ -99,7 +99,7 @@ fn get_dfx_replica_url() -> String {
                 let network = json.get(&network_name).or_else(|| json.get("local"));
                 if let Some(network_config) = network {
                     if let Some(bind) = network_config.get("bind").and_then(|v| v.as_str()) {
-                        // bind is in format "127.0.0.1:8080", convert to URL
+                        // bind is in format "127.0.0.1:4943", convert to URL
                         return format!("http://{}", bind);
                     }
                 }
@@ -108,7 +108,7 @@ fn get_dfx_replica_url() -> String {
     }
 
     // Default fallback
-    "http://127.0.0.1:8080".to_string()
+    "http://127.0.0.1:4943".to_string()
 }
 
 /// Create agent with identity
