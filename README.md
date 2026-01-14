@@ -88,7 +88,20 @@ local_sns/
 bash scripts/start.sh
 ```
 
-The menu provides a hierarchical structure with three main categories:
+The menu automatically checks if an SNS is deployed and shows different options accordingly:
+
+#### When No SNS is Deployed
+
+If no SNS is detected on the network, the menu shows a simplified interface with 3 options:
+
+- **1 / [M]** Mint ICP Tokens - Mint ICP tokens from minting account to a receiver
+- **2 / [B]** Get ICP Balance - Get ICP ledger balance for an account
+- **3 / [D]** Deploy SNS - Deploy a new SNS instance
+- **0 / Enter** Exit
+
+#### When SNS is Deployed
+
+Once an SNS is deployed, the menu provides a hierarchical structure with three main categories:
 
 **Main Menu:**
 
@@ -127,7 +140,7 @@ The menu provides a hierarchical structure with three main categories:
 - **2 / [R]** Rebuild Binary - Rebuild the Rust binary (useful after code changes)
 - **0 / Enter** Back to Main Menu
 
-The menu will automatically check if an SNS is deployed. If not, it will prompt you to deploy one on first run. You can navigate back to the main menu by pressing **0** or **Enter** in any submenu.
+After deploying an SNS (option 3 in the simplified menu), the menu automatically refreshes and shows the full main menu on the next iteration. You can navigate back to the main menu by pressing **0** or **Enter** in any submenu.
 
 ### Using Bash Scripts Directly
 
@@ -729,9 +742,10 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
 - **`start.sh`** - Interactive menu for all operations (recommended entry point)
 
-  - Automatically checks for SNS deployment
-  - Prompts to deploy if no SNS found
-  - Provides menu-driven access to all operations
+  - Automatically checks for SNS deployment status
+  - **When no SNS is deployed**: Shows simplified menu with 3 options (Mint ICP, Get ICP Balance, Deploy SNS)
+  - **When SNS is deployed**: Shows full hierarchical menu with ICP/SNS/Utils categories
+  - Menu automatically refreshes after deploying an SNS to show full options
 
 - **`build.sh`** - Build the local_sns Rust binary (tries release, falls back to dev)
 
