@@ -43,16 +43,24 @@ local_sns/
 │   ├── start.sh                   # Interactive menu (main entry point)
 │   ├── build.sh                   # Build the local_sns binary
 │   ├── deploy_local_sns.sh        # Deploy a new SNS
-│   ├── add_sns_hotkey.sh          # Add hotkey to SNS neuron (interactive)
-│   ├── add_icp_hotkey.sh          # Add hotkey to ICP neuron (interactive)
-│   ├── get_sns_neurons.sh         # List SNS neurons (interactive)
-│   ├── get_icp_neuron.sh          # Get ICP neuron information (interactive)
-│   ├── set_icp_visibility.sh      # Set ICP neuron visibility (interactive)
-│   ├── create_sns_neuron.sh       # Create SNS neuron by staking tokens (interactive)
-│   ├── disburse_sns_neuron.sh     # Disburse tokens from SNS neuron (interactive)
-│   ├── mint_sns_tokens.sh         # Mint SNS tokens via proposal (interactive)
-│   ├── increase_sns_dissolve_delay.sh  # Increase dissolve delay for SNS neuron (interactive)
-│   └── manage_sns_dissolving.sh   # Start or stop dissolving SNS neuron (interactive)
+│   ├── add_sns_hotkey.sh          # Add hotkey to SNS neuron
+│   ├── add_icp_hotkey.sh          # Add hotkey to ICP neuron
+│   ├── get_sns_neurons.sh         # List SNS neurons
+│   ├── get_icp_neurons.sh         # List ICP neurons
+│   ├── get_icp_neuron.sh          # Get ICP neuron information
+│   ├── set_icp_visibility.sh      # Set ICP neuron visibility
+│   ├── create_sns_neuron.sh       # Create SNS neuron by staking tokens
+│   ├── create_icp_neuron.sh       # Create ICP neuron by staking ICP
+│   ├── disburse_sns_neuron.sh     # Disburse tokens from SNS neuron
+│   ├── disburse_icp_neuron.sh     # Disburse tokens from ICP neuron
+│   ├── mint_sns_tokens.sh         # Mint SNS tokens via proposal
+│   ├── mint_icp.sh                # Mint ICP tokens
+│   ├── increase_sns_dissolve_delay.sh  # Increase dissolve delay for SNS neuron
+│   ├── increase_icp_dissolve_delay.sh  # Increase dissolve delay for ICP neuron
+│   ├── manage_sns_dissolving.sh   # Start or stop dissolving SNS neuron
+│   ├── manage_icp_dissolving.sh   # Start or stop dissolving ICP neuron
+│   ├── get_sns_balance.sh         # Get SNS ledger balance
+│   └── get_icp_balance.sh         # Get ICP ledger balance
 └── generated/             # Generated files (git-ignored)
     ├── sns_deployment_data.json
     └── participants/
@@ -80,28 +88,46 @@ local_sns/
 bash scripts/start.sh
 ```
 
-The menu provides easy access to all available operations. You can use either numbers or letter shortcuts:
+The menu provides a hierarchical structure with three main categories:
 
-**SNS Operations:**
-- **1 / [H]** Add SNS Neuron Hotkey - Add a hotkey to an SNS participant neuron (interactive)
-- **2 / [L]** List SNS Neurons - Query and display SNS neurons for a principal (interactive)
-- **3 / [C]** Create SNS Neuron - Create an SNS neuron by staking tokens from ledger balance (interactive)
-- **4 / [D]** Disburse SNS Neuron - Disburse tokens from an SNS neuron to a receiver (interactive)
-- **5 / [M]** Mint SNS Tokens - Mint additional tokens by creating a proposal (interactive)
-- **6 / [I]** Increase SNS Neuron Dissolve Delay - Add dissolve delay to an SNS neuron (interactive)
-- **[DD]** Dissolve SNS Neuron - Start or stop dissolving for an SNS neuron (interactive)
+**Main Menu:**
 
-**ICP Operations:**
-- **7** Add ICP Neuron Hotkey - Add a hotkey to the ICP neuron used for SNS deployment (interactive)
-- **8** Get ICP Neuron Info - Get detailed information about the ICP neuron (interactive)
-- **9** Set ICP Neuron Visibility - Set the ICP neuron to public or private (interactive)
+- **1 / [I]** ICP Operations
+- **2 / [S]** SNS Operations
+- **3 / [U]** Utils
+- **0** Exit
 
-**System Operations:**
-- **[d]** Deploy New SNS - Create a new SNS instance (creates a separate SNS, does not replace existing)
-- **[b]** Rebuild Binary - Rebuild the Rust binary (useful after code changes)
-- **0** Exit - Exit the menu
+**ICP Operations Submenu:**
 
-The menu will automatically check if an SNS is deployed. If not, it will prompt you to deploy one on first run.
+- **1 / [L]** List ICP Neurons - List all ICP neurons for a principal (includes detailed view)
+- **2 / [C]** Create ICP Neuron - Create an ICP neuron by staking ICP tokens
+- **3 / [D]** Disburse ICP Neuron - Disburse tokens from an ICP neuron
+- **4 / [M]** Mint ICP Tokens - Mint ICP tokens from minting account to a receiver
+- **5 / [H]** Add ICP Neuron Hotkey - Add a hotkey to an ICP neuron
+- **6 / [I]** Increase ICP Neuron Dissolve Delay - Add dissolve delay to an ICP neuron
+- **7 / [DD]** Dissolve ICP Neuron - Start or stop dissolving for an ICP neuron
+- **8 / [B]** Get ICP Balance - Get ICP ledger balance for an account
+- **0 / Enter** Back to Main Menu
+
+**SNS Operations Submenu:**
+
+- **1 / [L]** List SNS Neurons - Query and display SNS neurons for a principal (interactive)
+- **2 / [C]** Create SNS Neuron - Create an SNS neuron by staking tokens from ledger balance
+- **3 / [D]** Disburse SNS Neuron - Disburse tokens from an SNS neuron
+- **4 / [M]** Mint SNS Tokens - Mint additional tokens to an account
+- **5 / [H]** Add SNS Neuron Hotkey - Add a hotkey to an SNS participant neuron (interactive)
+- **6 / [I]** Increase SNS Neuron Dissolve Delay - Add dissolve delay to an SNS neuron
+- **7 / [DD]** Dissolve SNS Neuron - Start or stop dissolving for an SNS neuron
+- **8 / [B]** Get SNS Balance - Get SNS ledger balance for an account
+- **0 / Enter** Back to Main Menu
+
+**Utils Submenu:**
+
+- **1 / [D]** Deploy New SNS - Create a new SNS instance (creates a separate SNS, does not replace existing)
+- **2 / [R]** Rebuild Binary - Rebuild the Rust binary (useful after code changes)
+- **0 / Enter** Back to Main Menu
+
+The menu will automatically check if an SNS is deployed. If not, it will prompt you to deploy one on first run. You can navigate back to the main menu by pressing **0** or **Enter** in any submenu.
 
 ### Using Bash Scripts Directly
 
@@ -126,6 +152,11 @@ bash scripts/get_sns_neurons.sh
 # Or with principal:
 bash scripts/get_sns_neurons.sh <principal>
 
+# List ICP neurons (interactive - shows participant menu if no principal provided)
+bash scripts/get_icp_neurons.sh
+# Or with principal:
+bash scripts/get_icp_neurons.sh <principal>
+
 # Get ICP neuron information (interactive - uses deployment data or prompts for neuron ID)
 bash scripts/get_icp_neuron.sh
 # Or with neuron ID:
@@ -135,6 +166,41 @@ bash scripts/get_icp_neuron.sh <neuron_id>
 bash scripts/set_icp_visibility.sh
 # Or with argument:
 bash scripts/set_icp_visibility.sh <true|false>
+
+# Create ICP neuron (interactive - prompts for principal, amount, memo, dissolve delay)
+bash scripts/create_icp_neuron.sh
+# Or with arguments:
+bash scripts/create_icp_neuron.sh <principal> <amount_e8s> [memo] [dissolve_delay_seconds]
+
+# Disburse ICP neuron tokens (interactive - prompts for principal, neuron, receiver)
+bash scripts/disburse_icp_neuron.sh
+# Or with arguments:
+bash scripts/disburse_icp_neuron.sh <principal> [neuron_id|receiver_principal] [receiver_principal] [amount_e8s]
+
+# Increase ICP neuron dissolve delay (interactive - prompts for principal, neuron, delay)
+bash scripts/increase_icp_dissolve_delay.sh
+# Or with arguments:
+bash scripts/increase_icp_dissolve_delay.sh <principal> [neuron_id] [additional_dissolve_delay_seconds]
+
+# Manage ICP neuron dissolving state (interactive - start or stop dissolving)
+bash scripts/manage_icp_dissolving.sh
+# Or with arguments:
+bash scripts/manage_icp_dissolving.sh <principal> [start|stop] [neuron_id]
+
+# Mint ICP tokens (interactive - prompts for receiver and amount)
+bash scripts/mint_icp.sh
+# Or with arguments:
+bash scripts/mint_icp.sh <receiver_principal> <amount_e8s>
+
+# Get ICP balance (interactive - prompts for principal and optional subaccount)
+bash scripts/get_icp_balance.sh
+# Or with arguments:
+bash scripts/get_icp_balance.sh <principal> [subaccount_hex]
+
+# Get SNS balance (interactive - prompts for principal and optional subaccount)
+bash scripts/get_sns_balance.sh
+# Or with arguments:
+bash scripts/get_sns_balance.sh <principal> [subaccount_hex]
 
 # Create SNS neuron (interactive - prompts for principal, amount, memo, dissolve delay)
 bash scripts/create_sns_neuron.sh
@@ -187,26 +253,50 @@ cargo run --bin local_sns -- add-hotkey icp [hotkey_principal]
 # List SNS neurons (interactive - shows participant menu if no principal)
 cargo run --bin local_sns -- list-sns-neurons [principal]
 
+# List ICP neurons (interactive - shows participant menu if no principal)
+cargo run --bin local_sns -- list-icp-neurons [principal]
+
 # Create SNS neuron (interactive)
 cargo run --bin local_sns -- create-sns-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
+
+# Create ICP neuron (interactive)
+cargo run --bin local_sns -- create-icp-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
 
 # Disburse SNS neuron (interactive)
 cargo run --bin local_sns -- disburse-sns-neuron [participant_principal] [neuron_id_hex|receiver_principal] [receiver_principal]
 
+# Disburse ICP neuron (interactive)
+cargo run --bin local_sns -- disburse-icp-neuron [principal] [neuron_id|receiver_principal] [receiver_principal] [amount_e8s]
+
 # Increase SNS neuron dissolve delay (interactive)
 cargo run --bin local_sns -- increase-sns-dissolve-delay [participant_principal] [neuron_id_hex] [additional_dissolve_delay_seconds]
+
+# Increase ICP neuron dissolve delay (interactive)
+cargo run --bin local_sns -- increase-icp-dissolve-delay [principal] [neuron_id] [additional_dissolve_delay_seconds]
 
 # Manage SNS neuron dissolving state (interactive)
 cargo run --bin local_sns -- manage-sns-dissolving [participant_principal] [start|stop] [neuron_id_hex]
 
+# Manage ICP neuron dissolving state (interactive)
+cargo run --bin local_sns -- manage-icp-dissolving [principal] [start|stop] [neuron_id]
+
 # Mint SNS tokens (interactive)
 cargo run --bin local_sns -- mint-sns-tokens [proposer_principal] [receiver_principal] [amount_e8s]
+
+# Mint ICP tokens (interactive)
+cargo run --bin local_sns -- mint-icp [receiver_principal] [amount_e8s]
 
 # Set ICP neuron visibility (interactive - shows menu if not provided)
 cargo run --bin local_sns -- set-icp-visibility [true|false]
 
 # Get ICP neuron information (interactive)
 cargo run --bin local_sns -- get-icp-neuron [neuron_id]
+
+# Get ICP balance (interactive)
+cargo run --bin local_sns -- get-icp-balance [principal] [subaccount_hex]
+
+# Get SNS balance (interactive)
+cargo run --bin local_sns -- get-sns-balance [principal] [subaccount_hex]
 
 # Check if SNS is deployed
 cargo run --bin local_sns -- check-sns-deployed
@@ -392,6 +482,149 @@ cargo run --bin local_sns -- set-icp-visibility [true|false]
 
 Uses the ICP neuron from SNS deployment data.
 
+### `list-icp-neurons`
+
+List all ICP neurons owned by a principal.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- list-icp-neurons [principal]
+```
+
+**Arguments:**
+
+- `principal`: Optional. Principal to query neurons for. If not provided, shows participant selection menu.
+
+The output displays a formatted table showing neuron ID, stake, dissolve delay, and hotkeys. You can select a neuron to view full details.
+
+### `create-icp-neuron`
+
+Create an ICP neuron by staking ICP tokens.
+
+> **Note**: You must have ICP in your ledger balance before creating a neuron. Use `mint-icp` first to mint ICP to your account.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- create-icp-neuron [principal] [amount_e8s] [memo] [dissolve_delay_seconds]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `principal`: Optional. Principal to create the neuron for. If not provided, shows participant selection menu.
+- `amount_e8s`: Optional. Amount of ICP to stake in e8s. If not provided, stakes all available balance (after deducting transfer fee).
+- `memo`: Optional. Memo to use for neuron creation. If not provided, auto-generated based on neuron count (neuron_count + 1).
+- `dissolve_delay_seconds`: Optional. Dissolve delay in seconds. If not provided, prompts interactively.
+
+The command will:
+
+1. Check the ICP ledger balance for the principal
+2. Display available balance and transfer fee
+3. Transfer ICP to the governance canister subaccount
+4. Claim the neuron
+5. Optionally set dissolve delay if specified
+
+### `disburse-icp-neuron`
+
+Disburse tokens from an ICP neuron to a receiver account.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- disburse-icp-neuron [principal] [neuron_id|receiver_principal] [receiver_principal] [amount_e8s]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `neuron_id`: Optional. Neuron ID (number). If not provided and receiver is not provided, shows neuron selection menu.
+- `receiver_principal`: Optional. Principal to receive the disbursed tokens. Prompts if not provided.
+- `amount_e8s`: Optional. Amount to disburse in e8s. If not provided, full disbursement.
+
+### `increase-icp-dissolve-delay`
+
+Increase the dissolve delay for an ICP neuron by adding additional seconds.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- increase-icp-dissolve-delay [principal] [neuron_id] [additional_dissolve_delay_seconds]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `neuron_id`: Optional. Neuron ID (number). If not provided, shows neuron selection menu.
+- `additional_dissolve_delay_seconds`: Optional. Additional dissolve delay in seconds to add. If not provided, prompts interactively.
+
+The command will show available neurons and allow you to select which one to modify.
+
+### `manage-icp-dissolving`
+
+Start or stop dissolving for an ICP neuron.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- manage-icp-dissolving [principal] [start|stop] [neuron_id]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `principal`: Optional. Principal of the owner of the neuron. If not provided, shows participant selection menu.
+- `start|stop`: Optional. Action to perform. If not provided, shows interactive menu:
+  - `[1] Start Dissolving`
+  - `[2] Stop Dissolving`
+- `neuron_id`: Optional. Neuron ID (number). If not provided, shows neuron selection menu.
+
+### `mint-icp`
+
+Mint ICP tokens from the minting account to a receiver.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- mint-icp [receiver_principal] [amount_e8s]
+```
+
+**Arguments (all optional - interactive prompts if omitted):**
+
+- `receiver_principal`: Optional. Principal to receive the minted ICP. Prompts if not provided.
+- `amount_e8s`: Optional. Amount of ICP to mint in e8s. Prompts if not provided.
+
+The command will display the available balance in the minting account.
+
+### `get-icp-balance`
+
+Get the ICP ledger balance for an account.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- get-icp-balance [principal] [subaccount_hex]
+```
+
+**Arguments:**
+
+- `principal`: Optional. Principal to query balance for. If not provided, shows participant selection menu or prompts.
+- `subaccount_hex`: Optional. Subaccount in hex format. If not provided, uses default account.
+
+### `get-sns-balance`
+
+Get the SNS ledger balance for an account.
+
+**Usage:**
+
+```bash
+cargo run --bin local_sns -- get-sns-balance [principal] [subaccount_hex]
+```
+
+**Arguments:**
+
+- `principal`: Optional. Principal to query balance for. If not provided, shows participant selection menu or prompts.
+- `subaccount_hex`: Optional. Subaccount in hex format. If not provided, uses default account.
+
 ### `get-icp-neuron`
 
 Get full information about an ICP neuron.
@@ -516,6 +749,11 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 
   - Shows participant selection menu if principal not provided
 
+- **`get_icp_neurons.sh`** - List all ICP neurons for a principal (interactive)
+
+  - Shows participant selection menu if principal not provided
+  - Displays table with neuron details and allows selecting a neuron for full details
+
 - **`get_icp_neuron.sh`** - Get detailed ICP neuron information (interactive)
 
   - Uses deployment data or prompts for neuron ID
@@ -523,6 +761,41 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
 - **`set_icp_visibility.sh`** - Set ICP neuron visibility (interactive)
 
   - Shows menu (public/private) if not provided
+
+- **`create_icp_neuron.sh`** - Create an ICP neuron by staking ICP (interactive)
+
+  - Prompts for principal, amount, memo, and dissolve delay
+  - Displays available balance and transfer fee
+  - Auto-generates memo based on neuron count
+  - **Note**: Requires ICP in ledger balance (mint ICP first using `mint_icp.sh`)
+
+- **`disburse_icp_neuron.sh`** - Disburse tokens from ICP neuron (interactive)
+
+  - Prompts for principal, neuron, receiver, and optional amount if not provided
+  - Shows neuron selection menu if neuron ID not specified
+
+- **`increase_icp_dissolve_delay.sh`** - Increase dissolve delay for ICP neuron (interactive)
+
+  - Prompts for principal, neuron selection, and additional dissolve delay if not provided
+  - Shows neuron selection menu if neuron ID not specified
+
+- **`manage_icp_dissolving.sh`** - Start or stop dissolving for ICP neuron (interactive)
+
+  - Prompts for principal, action (start/stop), and neuron selection if not provided
+  - Shows action menu and neuron selection menu
+
+- **`mint_icp.sh`** - Mint ICP tokens (interactive)
+
+  - Prompts for receiver and amount if not provided
+  - Displays available balance in minting account
+
+- **`get_icp_balance.sh`** - Get ICP ledger balance (interactive)
+
+  - Prompts for principal and optional subaccount if not provided
+
+- **`get_sns_balance.sh`** - Get SNS ledger balance (interactive)
+
+  - Prompts for principal and optional subaccount if not provided
 
 - **`mint_sns_tokens.sh`** - Mint tokens via governance proposal (interactive)
 
@@ -537,9 +810,11 @@ All scripts are located in the `scripts/` directory. **All operation scripts are
   - **Note**: Requires tokens in ledger balance (mint tokens first using `mint_sns_tokens.sh`)
 
 - **`disburse_sns_neuron.sh`** - Disburse tokens from SNS neuron (interactive)
+
   - Prompts for participant, neuron, and receiver if not provided
 
 - **`increase_sns_dissolve_delay.sh`** - Increase dissolve delay for SNS neuron (interactive)
+
   - Prompts for participant, neuron selection, and additional dissolve delay if not provided
   - Shows neuron selection menu if neuron ID not specified
 

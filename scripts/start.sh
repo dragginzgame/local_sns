@@ -59,204 +59,262 @@ check_sns_deployed() {
 
 # Check if a menu option requires SNS to be deployed
 requires_sns_deployment() {
-    local choice="$1"
-    # Options 10 (Get ICP Balance), 12 (Mint ICP), 13 (Create ICP Neuron), 14 (Deploy SNS), and 15 (Rebuild Binary) don't require SNS to be deployed
-    # Option 11 (Get SNS Balance) requires SNS deployment
-    case "$choice" in
-        10|12|13|14|15)
-            return 1  # Doesn't require SNS
-            ;;
-        *)
-            return 0  # Requires SNS
-            ;;
-    esac
+    local category="$1"
+    local operation="$2"
+    
+    # Utils operations never require SNS
+    if [ "$category" = "utils" ]; then
+        return 1  # Doesn't require SNS
+    fi
+    
+    # ICP operations don't require SNS deployment
+    if [ "$category" = "icp" ]; then
+        return 1  # Doesn't require SNS
+    fi
+    
+    # SNS operations require SNS deployment
+    # Exception: "Get SNS Balance" (operation 8) requires SNS, but it's already in SNS category
+    if [ "$category" = "sns" ]; then
+        return 0  # Requires SNS
+    fi
+    
+    return 1
 }
 
-# Show menu
-show_menu() {
+# Show main menu
+show_main_menu() {
     clear
     print_header "Local SNS Management Menu"
     echo ""
+    echo -e "${CYAN}Select Category:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC} / [${GREEN}I${NC}]  ICP Operations"
+    echo -e "     Manage ICP neurons, balances, and tokens"
+    echo ""
+    echo -e "  ${GREEN}2${NC} / [${GREEN}S${NC}]  SNS Operations"
+    echo -e "     Manage SNS neurons, tokens, and governance"
+    echo ""
+    echo -e "  ${GREEN}3${NC} / [${GREEN}U${NC}]  Utils"
+    echo -e "     Deploy SNS and rebuild binary"
+    echo ""
+    echo -e "  ${GREEN}0${NC}         Exit"
+    echo ""
+    echo -n -e "${CYAN}Select category [0-3, I, S, U]: ${NC}"
+}
+
+# Show ICP submenu
+show_icp_menu() {
+    clear
+    print_header "ICP Operations"
+    echo ""
     echo -e "${CYAN}Available Operations:${NC}"
     echo ""
-    echo -e "  ${GREEN}1${NC} / [${GREEN}H${NC}]  Add SNS Neuron Hotkey"
-    echo -e "     Add a hotkey to an SNS participant neuron (interactive)"
+    echo -e "  ${GREEN}1${NC} / [${GREEN}L${NC}]  List ICP Neurons"
+    echo -e "     List all ICP neurons for a principal (includes detailed view)"
     echo ""
-    echo -e "  ${GREEN}2${NC} / [${GREEN}L${NC}]  List SNS Neurons"
+    echo -e "  ${GREEN}2${NC} / [${GREEN}C${NC}]  Create ICP Neuron"
+    echo -e "     Create an ICP neuron by staking ICP tokens"
+    echo ""
+    echo -e "  ${GREEN}3${NC} / [${GREEN}D${NC}]  Disburse ICP Neuron"
+    echo -e "     Disburse tokens from an ICP neuron"
+    echo ""
+    echo -e "  ${GREEN}4${NC} / [${GREEN}M${NC}]  Mint ICP Tokens"
+    echo -e "     Mint ICP tokens from minting account to a receiver"
+    echo ""
+    echo -e "  ${GREEN}5${NC} / [${GREEN}H${NC}]  Add ICP Neuron Hotkey"
+    echo -e "     Add a hotkey to an ICP neuron"
+    echo ""
+    echo -e "  ${GREEN}6${NC} / [${GREEN}I${NC}]  Increase ICP Neuron Dissolve Delay"
+    echo -e "     Add dissolve delay to an ICP neuron"
+    echo ""
+    echo -e "  ${GREEN}7${NC} / [${GREEN}DD${NC}] Dissolve ICP Neuron"
+    echo -e "     Start or stop dissolving for an ICP neuron"
+    echo ""
+    echo -e "  ${GREEN}8${NC} / [${GREEN}B${NC}]  Get ICP Balance"
+    echo -e "     Get ICP ledger balance for an account"
+    echo ""
+    echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
+    echo ""
+    echo -n -e "${CYAN}Select operation [0-8, L, C, D, M, H, I, DD, B, or Enter]: ${NC}"
+}
+
+# Show SNS submenu
+show_sns_menu() {
+    clear
+    print_header "SNS Operations"
+    echo ""
+    echo -e "${CYAN}Available Operations:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC} / [${GREEN}L${NC}]  List SNS Neurons"
     echo -e "     Query and display SNS neurons for a principal (interactive)"
     echo ""
-    echo -e "  ${GREEN}3${NC} / [${GREEN}C${NC}]  Create SNS Neuron"
+    echo -e "  ${GREEN}2${NC} / [${GREEN}C${NC}]  Create SNS Neuron"
     echo -e "     Create an SNS neuron by staking tokens from ledger balance"
     echo ""
-    echo -e "  ${GREEN}4${NC} / [${GREEN}D${NC}]  Disburse SNS Neuron"
+    echo -e "  ${GREEN}3${NC} / [${GREEN}D${NC}]  Disburse SNS Neuron"
     echo -e "     Disburse tokens from an SNS neuron"
     echo ""
-    echo -e "  ${GREEN}5${NC} / [${GREEN}M${NC}]  Mint SNS Tokens"
+    echo -e "  ${GREEN}4${NC} / [${GREEN}M${NC}]  Mint SNS Tokens"
     echo -e "     Mint additional tokens to an account"
+    echo ""
+    echo -e "  ${GREEN}5${NC} / [${GREEN}H${NC}]  Add SNS Neuron Hotkey"
+    echo -e "     Add a hotkey to an SNS participant neuron (interactive)"
     echo ""
     echo -e "  ${GREEN}6${NC} / [${GREEN}I${NC}]  Increase SNS Neuron Dissolve Delay"
     echo -e "     Add dissolve delay to an SNS neuron"
     echo ""
-    echo -e "     [${GREEN}DD${NC}] Dissolve SNS Neuron"
+    echo -e "  ${GREEN}7${NC} / [${GREEN}DD${NC}] Dissolve SNS Neuron"
     echo -e "     Start or stop dissolving for an SNS neuron"
     echo ""
-    echo -e "  ${GREEN}7${NC}         Add ICP Neuron Hotkey"
-    echo -e "     Add a hotkey to the ICP neuron used for SNS deployment"
-    echo ""
-    echo -e "  ${GREEN}8${NC}         Get ICP Neuron Info"
-    echo -e "     Get detailed information about the ICP neuron"
-    echo ""
-    echo -e "  ${GREEN}9${NC}         Set ICP Neuron Visibility"
-    echo -e "     Set the ICP neuron to public or private"
-    echo ""
-    echo -e "  ${GREEN}10${NC}        Get ICP Balance"
-    echo -e "     Get ICP ledger balance for an account"
-    echo ""
-    echo -e "  ${GREEN}11${NC}        Get SNS Balance"
+    echo -e "  ${GREEN}8${NC} / [${GREEN}B${NC}]  Get SNS Balance"
     echo -e "     Get SNS ledger balance for an account"
     echo ""
-    echo -e "  ${GREEN}12${NC}        Mint ICP Tokens"
-    echo -e "     Mint ICP tokens from minting account to a receiver"
+    echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
     echo ""
-    echo -e "  ${GREEN}13${NC}        Create ICP Neuron"
-    echo -e "     Create an ICP neuron by staking ICP tokens"
+    echo -n -e "${CYAN}Select operation [0-8, L, C, D, M, H, I, DD, B, or Enter]: ${NC}"
+}
+
+# Show Utils submenu
+show_utils_menu() {
+    clear
+    print_header "Utils"
     echo ""
-    echo -e "  ${GREEN}14${NC}        Deploy New SNS"
+    echo -e "${CYAN}Available Operations:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1${NC} / [${GREEN}D${NC}]  Deploy New SNS"
     echo -e "     Create a new SNS instance (creates a separate SNS, does not replace existing)"
     echo ""
-    echo -e "  ${GREEN}15${NC}        Rebuild Binary"
+    echo -e "  ${GREEN}2${NC} / [${GREEN}R${NC}]  Rebuild Binary"
     echo -e "     Rebuild the Rust binary (useful after code changes)"
     echo ""
-    echo -e "  ${GREEN}0${NC}         Exit"
+    echo -e "  ${GREEN}0${NC} / ${CYAN}Enter${NC}  Back to Main Menu"
     echo ""
-    echo -n -e "${CYAN}Select an option [0-15, H, L, C, D, M, I, DD]: ${NC}"
+    echo -n -e "${CYAN}Select operation [0-2, D, R, or Enter]: ${NC}"
 }
 
 # Run selected script
 run_script() {
-    local choice="$1"
+    local category="$1"
+    local operation="$2"
+    shift 2 || true
+    local script_args=("$@")
     local script_name=""
-    local script_args=()
     
-    # Check if this option requires SNS deployment
-    if requires_sns_deployment "$choice"; then
+    # Check if this operation requires SNS deployment
+    if requires_sns_deployment "$category" "$operation"; then
         if ! check_sns_deployed; then
             print_error "No SNS deployment found on the network!"
             echo ""
-            print_info "Please deploy an SNS first using option 14 (Deploy New SNS)."
+            print_info "Please deploy an SNS first using Utils > Deploy New SNS."
             print_info "Configuration can be modified in src/init/sns_config.rs"
             echo ""
             return 1
         fi
     fi
     
-    case "$choice" in
-        1|h|H)
-            script_name="add_sns_hotkey.sh"
-            # Pass through any additional arguments
-            shift
-            script_args=("$@")
+    case "$category" in
+        icp)
+            case "$operation" in
+                1|l|L)
+                    script_name="get_icp_neurons.sh"
+                    ;;
+                2|c|C)
+                    script_name="create_icp_neuron.sh"
+                    ;;
+                3|d|D)
+                    script_name="disburse_icp_neuron.sh"
+                    ;;
+                4|m|M)
+                    script_name="mint_icp.sh"
+                    ;;
+                5|h|H)
+                    script_name="add_icp_hotkey.sh"
+                    ;;
+                6|i|I)
+                    script_name="increase_icp_dissolve_delay.sh"
+                    ;;
+                7|dd|DD)
+                    script_name="manage_icp_dissolving.sh"
+                    ;;
+                8|b|B)
+                    script_name="get_icp_balance.sh"
+                    ;;
+                *)
+                    print_error "Invalid ICP operation: $operation"
+                    return 1
+                    ;;
+            esac
             ;;
-        2|l|L)
-            script_name="get_sns_neurons.sh"
-            shift
-            script_args=("$@")
+        sns)
+            case "$operation" in
+                1|l|L)
+                    script_name="get_sns_neurons.sh"
+                    ;;
+                2|c|C)
+                    script_name="create_sns_neuron.sh"
+                    ;;
+                3|d|D)
+                    script_name="disburse_sns_neuron.sh"
+                    ;;
+                4|m|M)
+                    script_name="mint_sns_tokens.sh"
+                    ;;
+                5|h|H)
+                    script_name="add_sns_hotkey.sh"
+                    ;;
+                6|i|I)
+                    script_name="increase_sns_dissolve_delay.sh"
+                    ;;
+                7|dd|DD)
+                    script_name="manage_sns_dissolving.sh"
+                    ;;
+                8|b|B)
+                    script_name="get_sns_balance.sh"
+                    ;;
+                *)
+                    print_error "Invalid SNS operation: $operation"
+                    return 1
+                    ;;
+            esac
             ;;
-        3|c|C)
-            script_name="create_sns_neuron.sh"
-            shift
-            script_args=("$@")
-            ;;
-        4|D)
-            # '4' or uppercase 'D' for Disburse
-            script_name="disburse_sns_neuron.sh"
-            shift
-            script_args=("$@")
-            ;;
-        5|m|M)
-            script_name="mint_sns_tokens.sh"
-            shift
-            script_args=("$@")
-            ;;
-        6|i|I)
-            script_name="increase_sns_dissolve_delay.sh"
-            shift
-            script_args=("$@")
-            ;;
-        dd|DD)
-            script_name="manage_sns_dissolving.sh"
-            shift
-            script_args=("$@")
-            ;;
-        7)
-            script_name="add_icp_hotkey.sh"
-            shift
-            script_args=("$@")
-            ;;
-        8)
-            script_name="get_icp_neuron.sh"
-            shift
-            script_args=("$@")
-            ;;
-        9)
-            script_name="set_icp_visibility.sh"
-            shift
-            script_args=("$@")
-            ;;
-        10)
-            script_name="get_icp_balance.sh"
-            shift
-            script_args=("$@")
-            ;;
-        11)
-            script_name="get_sns_balance.sh"
-            shift
-            script_args=("$@")
-            ;;
-        12)
-            script_name="mint_icp.sh"
-            shift
-            script_args=("$@")
-            ;;
-        13)
-            script_name="create_icp_neuron.sh"
-            shift
-            script_args=("$@")
-            ;;
-        14)
-            script_name="deploy_local_sns.sh"
-            shift
-            script_args=("$@")
-            ;;
-        15)
-            print_header "Rebuilding Binary"
-            bash "$SCRIPT_DIR/build.sh"
-            print_success "Binary rebuilt successfully!"
-            return 0
-            ;;
-        0)
-            print_info "Exiting..."
-            exit 0
+        utils)
+            case "$operation" in
+                1|d|D)
+                    script_name="deploy_local_sns.sh"
+                    ;;
+                2|r|R)
+                    print_header "Rebuilding Binary"
+                    bash "$SCRIPT_DIR/build.sh"
+                    print_success "Binary rebuilt successfully!"
+                    return 0
+                    ;;
+                *)
+                    print_error "Invalid Utils operation: $operation"
+                    return 1
+                    ;;
+            esac
             ;;
         *)
-            print_error "Invalid option: $choice"
+            print_error "Invalid category: $category"
             return 1
             ;;
     esac
     
-    local script_path="$SCRIPT_DIR/$script_name"
-    
-    if [ ! -f "$script_path" ]; then
-        print_error "Script not found: $script_name"
-        return 1
+    if [ -n "$script_name" ]; then
+        local script_path="$SCRIPT_DIR/$script_name"
+        
+        if [ ! -f "$script_path" ]; then
+            print_error "Script not found: $script_name"
+            return 1
+        fi
+        
+        # Make sure script is executable
+        chmod +x "$script_path"
+        
+        # Run the script with any passed arguments
+        print_header "Running: $script_name"
+        bash "$script_path" "${script_args[@]}"
     fi
-    
-    # Make sure script is executable
-    chmod +x "$script_path"
-    
-    # Run the script with any passed arguments
-    print_header "Running: $script_name"
-    bash "$script_path" "${script_args[@]}"
     
     return $?
 }
@@ -284,8 +342,14 @@ main() {
     fi
     
     # If arguments are provided, run script directly (non-interactive mode)
+    # Format: start.sh <category> <operation> [args...]
     if [ $# -gt 0 ]; then
-        run_script "$@"
+        if [ $# -lt 2 ]; then
+            print_error "Usage: $0 <category> <operation> [args...]"
+            print_info "Categories: icp, sns, utils"
+            exit 1
+        fi
+        run_script "$1" "$2" "${@:3}"
         exit $?
     fi
     
@@ -296,8 +360,8 @@ main() {
         print_info "Configuration can be modified in src/init/sns_config.rs"
         echo ""
         read -r
-        # Automatically deploy SNS (option 14)
-        run_script 14
+        # Automatically deploy SNS
+        run_script "utils" "1"
         echo ""
         echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
         read -r
@@ -305,19 +369,97 @@ main() {
     
     # Interactive menu loop
     while true; do
-        show_menu
-        read -r choice
+        show_main_menu
+        read -r category_choice
         
-        case "$choice" in
+        case "$category_choice" in
             0)
                 print_info "Exiting..."
                 exit 0
                 ;;
-            [1-9]|1[0-5]|[hH]|[lL]|[cC]|[dD]|[mM]|[iI]|dd|DD)
-                run_script "$choice"
-                echo ""
-                echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
-                read -r
+            1|i|I)
+                # ICP submenu
+                while true; do
+                    show_icp_menu
+                    read -r operation_choice
+                    
+                    # Handle empty input (Enter pressed) - go back to main menu
+                    if [ -z "$operation_choice" ]; then
+                        break
+                    fi
+                    
+                    case "$operation_choice" in
+                        0)
+                            break  # Back to main menu
+                            ;;
+                        [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
+                            run_script "icp" "$operation_choice"
+                            echo ""
+                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                            read -r
+                            ;;
+                        *)
+                            print_error "Invalid option. Please see menu for available options."
+                            sleep 1
+                            ;;
+                    esac
+                done
+                ;;
+            2|s|S)
+                # SNS submenu
+                while true; do
+                    show_sns_menu
+                    read -r operation_choice
+                    
+                    # Handle empty input (Enter pressed) - go back to main menu
+                    if [ -z "$operation_choice" ]; then
+                        break
+                    fi
+                    
+                    case "$operation_choice" in
+                        0)
+                            break  # Back to main menu
+                            ;;
+                        [1-8]|[lL]|[cC]|[dD]|[mM]|[hH]|[iI]|dd|DD|[bB])
+                            run_script "sns" "$operation_choice"
+                            echo ""
+                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                            read -r
+                            ;;
+                        *)
+                            print_error "Invalid option. Please see menu for available options."
+                            sleep 1
+                            ;;
+                    esac
+                done
+                ;;
+            3|u|U)
+                # Utils submenu
+                while true; do
+                    show_utils_menu
+                    read -r operation_choice
+                    
+                    # Handle empty input (Enter pressed) - go back to main menu
+                    if [ -z "$operation_choice" ]; then
+                        break
+                    fi
+                    
+                    case "$operation_choice" in
+                        0)
+                            break  # Back to main menu
+                            ;;
+                        [1-2]|[dD]|[rR])
+                            run_script "utils" "$operation_choice"
+                            echo ""
+                            echo -n -e "${CYAN}Press Enter to return to menu...${NC}"
+                            read -r
+                            ;;
+                        *)
+                            print_error "Invalid option. Please see menu for available options."
+                            sleep 1
+                            ;;
+                    esac
+                done
                 ;;
             *)
                 print_error "Invalid option. Please see menu for available options."
@@ -329,4 +471,5 @@ main() {
 
 # Run main function
 main "$@"
+
 

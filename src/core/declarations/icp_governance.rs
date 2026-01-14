@@ -23,7 +23,7 @@ pub struct DateUtc {
     pub year: u32,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Serialize)]
 pub struct AccountIdentifier {
     pub hash: Vec<u8>,
 }
@@ -82,7 +82,7 @@ pub struct ProposalId {
     pub id: u64,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Serialize)]
 pub struct NeuronStakeTransfer {
     pub to_subaccount: Vec<u8>,
     pub neuron_stake_e8s: u64,
@@ -141,7 +141,7 @@ pub struct Follow {
     pub followees: Vec<NeuronId>,
 }
 
-#[derive(CandidType, Deserialize)]
+#[derive(CandidType, Deserialize, Serialize)]
 pub struct Account {
     pub owner: Option<Principal>,
     pub subaccount: Option<Vec<u8>>,
@@ -416,10 +416,16 @@ pub struct ExecuteNnsFunction {
     pub payload: Vec<u8>,
 }
 
+#[derive(CandidType, Deserialize, Serialize)]
+pub struct KnownNeuronData {
+    pub name: String,
+    pub description: Option<String>,
+}
+
 #[derive(CandidType, Deserialize)]
 pub struct KnownNeuron {
     pub id: Option<NeuronId>,
-    pub known_neuron_data: Option<()>, // Simplified
+    pub known_neuron_data: Option<KnownNeuronData>,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -627,6 +633,15 @@ pub struct DisburseResponse {
 }
 
 // Placeholder types for full neuron
+#[derive(CandidType, Deserialize, Serialize)]
+pub struct MaturityDisbursement {
+    pub account_identifier_to_disburse_to: Option<AccountIdentifier>,
+    pub timestamp_of_disbursement_seconds: Option<u64>,
+    pub amount_e8s: Option<u64>,
+    pub account_to_disburse_to: Option<Account>,
+    pub finalize_disbursement_timestamp_seconds: Option<u64>,
+}
+
 #[derive(CandidType, Deserialize)]
 pub struct NeuronInfo {
     pub id: Option<NeuronId>,
@@ -653,13 +668,13 @@ pub struct Neuron {
     pub hot_keys: Vec<Principal>,
     pub account: Vec<u8>,
     pub joined_community_fund_timestamp_seconds: Option<u64>,
-    pub maturity_disbursements_in_progress: Option<Vec<()>>, // Simplified
+    pub maturity_disbursements_in_progress: Option<Vec<MaturityDisbursement>>,
     pub dissolve_state: Option<DissolveState>,
     pub followees: Vec<(i32, Followees)>,
     pub neuron_fees_e8s: u64,
     pub visibility: Option<i32>,
-    pub transfer: Option<()>,          // Simplified
-    pub known_neuron_data: Option<()>, // Simplified
+    pub transfer: Option<NeuronStakeTransfer>,
+    pub known_neuron_data: Option<KnownNeuronData>,
     pub spawn_at_timestamp_seconds: Option<u64>,
 }
 
@@ -687,13 +702,24 @@ pub struct ManageNeuronResponse {
 }
 
 #[derive(CandidType, Deserialize)]
+pub struct NeuronSubaccount {
+    pub subaccount: Vec<u8>,
+}
+
+#[derive(CandidType, Deserialize)]
 pub struct ListNeurons {
-    pub of_principal: Option<Principal>,
-    pub limit: u32,
-    pub start_page_at: Option<NeuronId>,
+    pub page_size: Option<u64>,
+    pub include_public_neurons_in_full_neurons: Option<bool>,
+    pub neuron_ids: Vec<u64>,
+    pub page_number: Option<u64>,
+    pub include_empty_neurons_readable_by_caller: Option<bool>,
+    pub neuron_subaccounts: Option<Vec<NeuronSubaccount>>,
+    pub include_neurons_readable_by_caller: bool,
 }
 
 #[derive(CandidType, Deserialize)]
 pub struct ListNeuronsResponse {
-    pub neurons: Vec<Neuron>,
+    pub neuron_infos: Vec<(u64, NeuronInfo)>,
+    pub full_neurons: Vec<Neuron>,
+    pub total_pages_available: Option<u64>,
 }

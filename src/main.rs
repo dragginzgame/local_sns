@@ -5,9 +5,11 @@ use anyhow::Result;
 
 use core::ops::commands::{
     handle_add_hotkey, handle_check_sns_deployed, handle_create_icp_neuron,
-    handle_create_sns_neuron, handle_disburse_sns_neuron, handle_get_icp_balance,
-    handle_get_icp_neuron, handle_get_sns_balance, handle_increase_sns_dissolve_delay,
-    handle_list_neurons, handle_manage_sns_dissolving, handle_mint_icp, handle_mint_sns_tokens,
+    handle_create_sns_neuron, handle_disburse_icp_neuron, handle_disburse_sns_neuron,
+    handle_get_icp_balance, handle_get_icp_neuron, handle_get_sns_balance,
+    handle_increase_icp_dissolve_delay, handle_increase_sns_dissolve_delay,
+    handle_list_icp_neurons, handle_list_neurons, handle_manage_icp_dissolving,
+    handle_manage_sns_dissolving, handle_mint_icp, handle_mint_sns_tokens,
     handle_set_icp_visibility,
 };
 use core::ops::deployment::deploy_sns;
@@ -23,13 +25,19 @@ async fn main() -> Result<()> {
             "deploy-sns" => return deploy_sns().await,
             "add-hotkey" => return handle_add_hotkey(&args).await,
             "list-sns-neurons" => return handle_list_neurons(&args).await,
+            "list-icp-neurons" => return handle_list_icp_neurons(&args).await,
             "mint-sns-tokens" => return handle_mint_sns_tokens(&args).await,
             "create-sns-neuron" => return handle_create_sns_neuron(&args).await,
             "disburse-sns-neuron" => return handle_disburse_sns_neuron(&args).await,
+            "disburse-icp-neuron" => return handle_disburse_icp_neuron(&args).await,
             "increase-sns-dissolve-delay" => {
                 return handle_increase_sns_dissolve_delay(&args).await;
             }
+            "increase-icp-dissolve-delay" => {
+                return handle_increase_icp_dissolve_delay(&args).await;
+            }
             "manage-sns-dissolving" => return handle_manage_sns_dissolving(&args).await,
+            "manage-icp-dissolving" => return handle_manage_icp_dissolving(&args).await,
             "set-icp-visibility" => return handle_set_icp_visibility(&args).await,
             "get-icp-neuron" => return handle_get_icp_neuron(&args).await,
             "get-icp-balance" => return handle_get_icp_balance(&args).await,
@@ -43,15 +51,23 @@ async fn main() -> Result<()> {
                 eprintln!("  deploy-sns          - Deploy a new SNS on local dfx network");
                 eprintln!("  add-hotkey          - Add a hotkey to an SNS or ICP neuron");
                 eprintln!("  list-sns-neurons    - List SNS neurons for a principal");
+                eprintln!("  list-icp-neurons    - List ICP neurons for a principal");
                 eprintln!("  mint-sns-tokens     - Create proposal to mint SNS tokens and vote");
                 eprintln!("  create-sns-neuron        - Create an SNS neuron by staking tokens");
                 eprintln!(
                     "  disburse-sns-neuron      - Disburse an SNS neuron to a receiver principal"
                 );
                 eprintln!(
+                    "  disburse-icp-neuron      - Disburse an ICP neuron to a receiver principal"
+                );
+                eprintln!(
                     "  increase-sns-dissolve-delay - Increase dissolve delay for an SNS neuron"
                 );
+                eprintln!(
+                    "  increase-icp-dissolve-delay - Increase dissolve delay for an ICP neuron"
+                );
                 eprintln!("  manage-sns-dissolving    - Start or stop dissolving an SNS neuron");
+                eprintln!("  manage-icp-dissolving    - Start or stop dissolving an ICP neuron");
                 eprintln!("  set-icp-visibility       - Set ICP neuron visibility");
                 eprintln!("  get-icp-neuron           - Get ICP neuron information");
                 eprintln!("  get-icp-balance          - Get ICP ledger balance for an account");

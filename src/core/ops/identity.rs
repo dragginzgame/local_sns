@@ -57,11 +57,52 @@ pub fn load_minting_identity() -> Result<Box<dyn Identity>> {
     anyhow::bail!("Failed to load minting identity: could not parse as Secp256k1 or Ed25519")
 }
 
+/// Get dfx replica URL from configuration or environment
+/// Checks in order:
+/// 1. DFX_REPLICA_URL environment variable
+/// 2. DFX_REPLICA_PORT environment variable (constructs URL)
+/// 3. ~/.config/dfx/networks.json (reads bind address for network specified by DFX_NETWORK, or "local")
+/// 4. Default: http://127.0.0.1:8080
+fn get_dfx_replica_url() -> String {
+    // Check environment variables first
+    if let Ok(url) = std::env::var("DFX_REPLICA_URL") {
+        return url;
+    }
+
+    if let Ok(port) = std::env::var("DFX_REPLICA_PORT") {
+        return format!("http://127.0.0.1:{}", port);
+    }
+
+    // Try to read from dfx networks.json
+    // First check if DFX_NETWORK is set, otherwise use "local"
+    let network_name = std::env::var("DFX_NETWORK").unwrap_or_else(|_| "local".to_string());
+
+    if let Ok(home) = std::env::var("HOME") {
+        let networks_path = PathBuf::from(home).join(".config/dfx/networks.json");
+        if let Ok(content) = std::fs::read_to_string(&networks_path) {
+            // Try to parse JSON and get bind address for the network
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Try the specified network first, then fall back to "local"
+                let network = json.get(&network_name).or_else(|| json.get("local"));
+                if let Some(network_config) = network {
+                    if let Some(bind) = network_config.get("bind").and_then(|v| v.as_str()) {
+                        // bind is in format "127.0.0.1:8080", convert to URL
+                        return format!("http://{}", bind);
+                    }
+                }
+            }
+        }
+    }
+
+    // Default fallback
+    "http://127.0.0.1:8080".to_string()
+}
+
 /// Create agent with identity
 pub async fn create_agent(identity: Box<dyn Identity>) -> Result<Agent> {
-    let url = "http://127.0.0.1:8080";
+    let url = get_dfx_replica_url();
     let agent = Agent::builder()
-        .with_url(url)
+        .with_url(&url)
         .with_ingress_expiry(StdDuration::from_secs(300))
         .with_identity(identity)
         .build()?;

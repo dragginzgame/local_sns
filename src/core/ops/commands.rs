@@ -6,7 +6,8 @@ use hex;
 
 use crate::core::ops::governance_ops::{
     add_hotkey_to_icp_neuron_default_path, create_icp_neuron_default_path,
-    get_icp_neuron_default_path, mint_icp_default_path, set_icp_neuron_visibility_default_path,
+    get_icp_neuron_default_path, list_icp_neurons_for_principal_default_path,
+    mint_icp_default_path, set_icp_neuron_visibility_default_path,
 };
 use crate::core::ops::ledger_ops::{get_icp_ledger_balance, get_sns_ledger_balance};
 use crate::core::ops::sns_governance_ops::{
@@ -21,6 +22,7 @@ use crate::core::ops::snsw_ops::check_sns_deployed_default_path;
 use crate::core::utils::{print_header, print_info, print_success, print_warning};
 
 /// Helper function to select a participant interactively
+/// Includes the owner (with "(owner)" label) and all participants
 fn select_participant() -> Result<Principal> {
     use crate::core::utils::data_output::SnsCreationData;
     use std::io::{self, Write};
@@ -34,35 +36,39 @@ fn select_participant() -> Result<Principal> {
     let deployment_data: SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    if deployment_data.participants.is_empty() {
-        anyhow::bail!("No participants found in deployment data");
-    }
+    let total_options = 1 + deployment_data.participants.len(); // 1 for owner + participants
 
-    println!("Available participants:");
+    println!("Available options:");
     println!();
+    // Show owner first
+    println!("  [1] {} (owner)", deployment_data.owner_principal);
+    // Show participants
     for (i, participant) in deployment_data.participants.iter().enumerate() {
-        println!("  [{}] {}", i + 1, participant.principal);
+        println!("  [{}] {}", i + 2, participant.principal);
     }
     println!();
-    print!(
-        "Select participant number (1-{}): ",
-        deployment_data.participants.len()
-    );
+    print!("Select option number (1-{}): ", total_options);
     io::stdout().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let selection: usize = input.trim().parse().context("Invalid selection")?;
 
-    if selection < 1 || selection > deployment_data.participants.len() {
+    if selection < 1 || selection > total_options {
         anyhow::bail!(
             "Invalid selection. Please choose a number between 1 and {}",
-            deployment_data.participants.len()
+            total_options
         );
     }
 
-    Principal::from_text(&deployment_data.participants[selection - 1].principal)
-        .context("Failed to parse selected participant principal")
+    // Selection 1 is owner, selections 2+ are participants
+    if selection == 1 {
+        Principal::from_text(&deployment_data.owner_principal)
+            .context("Failed to parse owner principal")
+    } else {
+        Principal::from_text(&deployment_data.participants[selection - 2].principal)
+            .context("Failed to parse selected participant principal")
+    }
 }
 
 /// Helper function to select a neuron interactively for a given principal
@@ -308,51 +314,11 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
 
 /// Handle list-sns-neurons command
 pub async fn handle_list_neurons(args: &[String]) -> Result<()> {
-    use crate::core::utils::data_output::SnsCreationData;
     use std::io::{self, Write};
 
     let principal = if args.len() < 3 {
-        // No principal provided - show participant selection
-        print_header("Select Participant");
-
-        // Read deployment data
-        let deployment_path = crate::core::utils::data_output::get_output_path();
-        let data_content =
-            std::fs::read_to_string(&deployment_path).context("Failed to read deployment data")?;
-        let deployment_data: SnsCreationData =
-            serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
-
-        if deployment_data.participants.is_empty() {
-            eprintln!("No participants found in deployment data");
-            std::process::exit(1);
-        }
-
-        println!("Available participants:");
-        println!();
-        for (i, participant) in deployment_data.participants.iter().enumerate() {
-            println!("  [{}] {}", i + 1, participant.principal);
-        }
-        println!();
-        print!(
-            "Select participant number (1-{}): ",
-            deployment_data.participants.len()
-        );
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let selection: usize = input.trim().parse().context("Invalid selection")?;
-
-        if selection < 1 || selection > deployment_data.participants.len() {
-            eprintln!(
-                "Invalid selection. Please choose a number between 1 and {}",
-                deployment_data.participants.len()
-            );
-            std::process::exit(1);
-        }
-
-        Principal::from_text(&deployment_data.participants[selection - 1].principal)
-            .context("Failed to parse selected participant principal")?
+        // No principal provided - show participant selection (includes owner)
+        select_participant()?
     } else {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     };
@@ -785,16 +751,22 @@ pub async fn handle_get_icp_neuron(args: &[String]) -> Result<()> {
 pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get receiver principal (interactive if not provided)
+    // Step 1: Get receiver principal (select participant if not provided)
     let receiver_principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse receiver principal")?
     } else {
-        print_header("Mint ICP");
-        print!("Enter receiver principal: ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+        // Try to select participant, or prompt for principal
+        match select_participant() {
+            Ok(p) => p,
+            Err(_) => {
+                print_header("Mint ICP");
+                print!("Enter receiver principal: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+            }
+        }
     };
 
     // Get minting account balance to show user
@@ -854,15 +826,56 @@ pub async fn handle_mint_icp(args: &[String]) -> Result<()> {
 pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
     use std::io::{self, Write};
 
-    // Step 1: Get principal (default dfx identity if not provided)
+    // Step 1: Get principal (select participant if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Use default dfx identity principal
-        use crate::core::ops::identity::load_dfx_identity;
-        let identity = load_dfx_identity(None).context("Failed to load dfx identity")?;
-        identity.sender().unwrap_or(Principal::anonymous())
+        // Try to select participant, or use dfx identity as fallback
+        match select_participant() {
+            Ok(p) => p,
+            Err(_) => {
+                // Fallback to dfx identity principal
+                use crate::core::ops::identity::load_dfx_identity;
+                match load_dfx_identity(None)
+                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
+                {
+                    Ok(p) => p,
+                    Err(_) => {
+                        print_header("Create ICP Neuron");
+                        print!("Enter principal: ");
+                        io::stdout().flush()?;
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input)?;
+                        Principal::from_text(input.trim()).context("Failed to parse principal")?
+                    }
+                }
+            }
+        }
     };
+
+    // Get ICP balance for the principal to show available amount
+    use crate::core::ops::identity::create_agent;
+    use crate::core::utils::constants::LEDGER_CANISTER;
+    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
+    let agent_for_balance = create_agent(Box::new(anonymous_identity))
+        .await
+        .context("Failed to create agent for balance query")?;
+
+    let ledger_canister =
+        Principal::from_text(LEDGER_CANISTER).context("Failed to parse ICP Ledger canister ID")?;
+
+    let icp_balance = get_icp_ledger_balance(&agent_for_balance, ledger_canister, principal, None)
+        .await
+        .context("Failed to get ICP balance")?;
+    let icp_balance_display = icp_balance as f64 / 100_000_000.0;
+
+    use crate::core::utils::constants::ICP_TRANSFER_FEE;
+    let available_after_fee = if icp_balance > ICP_TRANSFER_FEE {
+        icp_balance - ICP_TRANSFER_FEE
+    } else {
+        0
+    };
+    let available_after_fee_display = available_after_fee as f64 / 100_000_000.0;
 
     // Step 2: Get amount (interactive if not provided)
     let amount_e8s = if args.len() >= 4 {
@@ -872,111 +885,131 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
     } else {
         print_header("Create ICP Neuron");
         print_info(&format!("Principal: {}", principal));
-        println!();
-        print!("Enter amount in e8s to stake (e.g., 100000000 for 1 ICP): ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        input
-            .trim()
-            .parse::<u64>()
-            .context("Failed to parse amount - must be a number")?
-    };
-
-    // Step 3: Get memo (auto-increment based on neuron count if not provided)
-    // Try to count existing neurons to suggest next memo
-    use crate::core::ops::identity::create_agent;
-    use crate::core::utils::constants::GOVERNANCE_CANISTER;
-
-    let anonymous_identity = ic_agent::identity::AnonymousIdentity;
-    let agent_for_query = create_agent(Box::new(anonymous_identity))
-        .await
-        .context("Failed to create agent for query")?;
-
-    let governance_canister = Principal::from_text(GOVERNANCE_CANISTER)
-        .context("Failed to parse ICP Governance canister ID")?;
-
-    // Try to list neurons using ICP governance's list_neurons method
-    let mut neuron_count = 0;
-
-    // Use the same ListNeurons structure as SNS governance
-    use super::super::declarations::icp_governance::{ListNeurons, ListNeuronsResponse};
-    use candid::Decode;
-    let list_request = ListNeurons {
-        of_principal: Some(principal),
-        limit: 100,
-        start_page_at: None,
-    };
-
-    if let Ok(response) = agent_for_query
-        .query(&governance_canister, "list_neurons")
-        .with_arg(candid::encode_args((list_request,))?)
-        .call()
-        .await
-    {
-        // Try to decode the response
-        if let Ok(list_response) = Decode!(&response, ListNeuronsResponse) {
-            neuron_count = list_response.neurons.len();
-        }
-    }
-
-    // Suggest memo = (neuron_count + 1) for next neuron
-    // Start from 1 if no neurons found
-    let suggested_memo = (neuron_count + 1) as u64;
-
-    let memo = if args.len() >= 5 {
-        Some(args[4].parse::<u64>().context("Failed to parse memo")?)
-    } else {
-        print_header("Create ICP Neuron");
-        print_info(&format!("Principal: {}", principal));
-        let icp_amount = amount_e8s as f64 / 100_000_000.0;
         print_info(&format!(
-            "Amount: {} e8s ({:.8} ICP)",
-            amount_e8s, icp_amount
+            "Available balance: {} e8s ({:.8} ICP)",
+            icp_balance, icp_balance_display
         ));
-        if neuron_count > 0 {
-            print_info(&format!("Found {} existing neuron(s)", neuron_count));
-        }
         print_info(&format!(
-            "Suggested memo: {} (auto-incremented)",
-            suggested_memo
+            "Transfer fee: {} e8s ({:.8} ICP)",
+            ICP_TRANSFER_FEE,
+            ICP_TRANSFER_FEE as f64 / 100_000_000.0
         ));
+        if available_after_fee > 0 {
+            print_info(&format!(
+                "Available after fee: {} e8s ({:.8} ICP)",
+                available_after_fee, available_after_fee_display
+            ));
+        }
         println!();
         print!(
-            "Enter memo (or press Enter to use suggested memo {}): ",
-            suggested_memo
+            "Enter amount in e8s to stake (e.g., 100000000 for 1 ICP, or press Enter to use all available): "
         );
         io::stdout().flush()?;
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let input = input.trim();
         if input.is_empty() {
-            Some(suggested_memo)
+            // Use all available balance after fee
+            if available_after_fee == 0 {
+                anyhow::bail!(
+                    "Insufficient balance. Need at least {} e8s (transfer fee) + amount to stake",
+                    ICP_TRANSFER_FEE
+                );
+            }
+            available_after_fee
         } else {
-            Some(
-                input
-                    .parse::<u64>()
-                    .context("Failed to parse memo - must be a number")?,
-            )
+            input
+                .parse::<u64>()
+                .context("Failed to parse amount - must be a number")?
         }
     };
 
-    print_header("Creating ICP Neuron");
-    print_info(&format!("Principal: {}", principal));
-    let icp_amount = amount_e8s as f64 / 100_000_000.0;
-    print_info(&format!(
-        "Amount: {} e8s ({:.8} ICP)",
-        amount_e8s, icp_amount
-    ));
-    if let Some(m) = memo {
-        print_info(&format!("Memo: {} (auto-incremented)", m));
+    // Step 3: Get optional memo
+    let memo = if args.len() >= 5 {
+        Some(args[4].parse::<u64>().context("Failed to parse memo")?)
     } else {
-        print_info(&format!("Memo: {} (default)", suggested_memo));
+        None
+    };
+
+    // Step 4: Get optional dissolve delay (interactive if not provided)
+    let dissolve_delay_seconds = if args.len() >= 6 {
+        let delay = args[5]
+            .parse::<u64>()
+            .context("Failed to parse dissolve_delay_seconds")?;
+        if delay > 0 { Some(delay) } else { None }
+    } else {
+        // Interactive prompt for dissolve delay
+        println!();
+        print!("Enter dissolve delay in seconds (or press Enter to skip, default: 0): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.is_empty() {
+            None // No dissolve delay
+        } else {
+            let delay: u64 = input
+                .parse()
+                .context("Failed to parse dissolve delay - must be a number")?;
+            if delay > 0 { Some(delay) } else { None }
+        }
+    };
+
+    // Get existing neuron count to show what memo will be used
+    let existing_neurons = list_icp_neurons_for_principal_default_path(principal)
+        .await
+        .context("Failed to list existing neurons")?;
+    let neuron_count = existing_neurons.len();
+    let auto_memo = (neuron_count + 1) as u64;
+
+    if args.len() >= 4 {
+        // Show header if amount was provided via args
+        print_header("Creating ICP Neuron");
+        print_info(&format!("Principal: {}", principal));
+        print_info(&format!("Existing neurons: {}", neuron_count));
+        let icp_amount = amount_e8s as f64 / 100_000_000.0;
+        print_info(&format!(
+            "Amount: {} e8s ({:.8} ICP)",
+            amount_e8s, icp_amount
+        ));
+        if let Some(m) = memo {
+            print_info(&format!("Memo: {} (specified)", m));
+        } else {
+            print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
+        }
+        if let Some(delay) = dissolve_delay_seconds {
+            print_info(&format!("Dissolve delay: {} seconds", delay));
+        } else {
+            print_info("Dissolve delay: 0 seconds (none)");
+        }
+    } else {
+        // Amount was entered interactively, show memo and dissolve delay info
+        print_info(&format!("Existing neurons: {}", neuron_count));
+        if let Some(m) = memo {
+            print_info(&format!("Memo: {} (specified)", m));
+        } else {
+            print_info(&format!("Memo: {} (auto: neuron count + 1)", auto_memo));
+        }
+        if let Some(delay) = dissolve_delay_seconds {
+            print_info(&format!("Dissolve delay: {} seconds", delay));
+        } else {
+            print_info("Dissolve delay: 0 seconds (none)");
+        }
     }
 
-    let neuron_id = create_icp_neuron_default_path(principal, amount_e8s, memo)
-        .await
-        .context("Failed to create ICP neuron")?;
+    // Use auto-assigned memo if not specified
+    let final_memo = memo.unwrap_or(auto_memo);
+
+    let neuron_id = create_icp_neuron_default_path(
+        principal,
+        amount_e8s,
+        Some(final_memo),
+        dissolve_delay_seconds,
+    )
+    .await
+    .context("Failed to create ICP neuron")?;
 
     print_success(&format!(
         "ICP neuron created successfully! Neuron ID: {}",
@@ -985,29 +1018,272 @@ pub async fn handle_create_icp_neuron(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+/// Handle list-icp-neurons command
+pub async fn handle_list_icp_neurons(args: &[String]) -> Result<()> {
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (select participant if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        // Try to select participant, or use dfx identity as fallback
+        match select_participant() {
+            Ok(p) => p,
+            Err(_) => {
+                // Fallback to dfx identity principal
+                use crate::core::ops::identity::load_dfx_identity;
+                match load_dfx_identity(None)
+                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
+                {
+                    Ok(p) => p,
+                    Err(_) => {
+                        print_header("List ICP Neurons");
+                        print!("Enter principal: ");
+                        io::stdout().flush()?;
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input)?;
+                        Principal::from_text(input.trim()).context("Failed to parse principal")?
+                    }
+                }
+            }
+        }
+    };
+
+    print_header("Listing ICP Neurons");
+    print_info(&format!("Principal: {}", principal));
+
+    let neurons = list_icp_neurons_for_principal_default_path(principal)
+        .await
+        .context("Failed to list ICP neurons")?;
+
+    if neurons.is_empty() {
+        print_warning("No neurons found for this principal");
+        return Ok(());
+    }
+
+    print_success(&format!("Found {} neuron(s)", neurons.len()));
+    println!();
+
+    // Print table header
+    println!("{:-<100}", "");
+    println!(
+        "{:<5} {:<20} {:<20} {:<25} {:<30}",
+        "#", "Neuron ID", "Stake (e8s)", "Dissolve Delay", "Hotkeys"
+    );
+    println!("{:-<100}", "");
+
+    for (index, neuron) in neurons.iter().enumerate() {
+        // Neuron ID - ICP uses u64 IDs
+        let neuron_id_display = if let Some(id) = &neuron.id {
+            id.id.to_string()
+        } else {
+            "<none>".to_string()
+        };
+
+        // Stake
+        let stake_str = format!("{}", neuron.cached_neuron_stake_e8s);
+
+        // Dissolve delay
+        let dissolve_delay_str = match &neuron.dissolve_state {
+            Some(super::super::declarations::icp_governance::DissolveState::DissolveDelaySeconds(seconds)) => {
+                let days = *seconds / 86400;
+                format!("{} days ({}s)", days, seconds)
+            }
+            Some(super::super::declarations::icp_governance::DissolveState::WhenDissolvedTimestampSeconds(timestamp)) => {
+                format!("Dissolving (dissolves at {})", timestamp)
+            }
+            None => "No state".to_string(),
+        };
+
+        // Hotkeys
+        let hotkeys_str = if neuron.hot_keys.is_empty() {
+            "None".to_string()
+        } else {
+            format!("{} hotkey(s)", neuron.hot_keys.len())
+        };
+
+        // Truncate dissolve delay if too long for table formatting
+        let dissolve_delay_display = if dissolve_delay_str.len() > 18 {
+            format!("{}...", &dissolve_delay_str[..18])
+        } else {
+            dissolve_delay_str
+        };
+
+        println!(
+            "{:<5} {:<20} {:<20} {:<25} {:<30}",
+            index + 1,
+            neuron_id_display,
+            stake_str,
+            dissolve_delay_display,
+            hotkeys_str
+        );
+    }
+
+    println!("{:-<100}", "");
+    println!();
+
+    // Ask if user wants to see details for a specific neuron
+    if neurons.len() > 0 {
+        println!();
+        print!(
+            "Enter neuron number to see full details (1-{}) or press Enter to skip: ",
+            neurons.len()
+        );
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let selection = input.trim();
+
+        if !selection.is_empty() {
+            let selection_num: usize = selection
+                .parse()
+                .context("Invalid selection - must be a number")?;
+            if selection_num < 1 || selection_num > neurons.len() {
+                eprintln!(
+                    "Invalid selection. Please choose a number between 1 and {}",
+                    neurons.len()
+                );
+                return Ok(());
+            }
+
+            let selected_neuron = &neurons[selection_num - 1];
+            display_icp_neuron_details(selected_neuron);
+        }
+    }
+
+    Ok(())
+}
+
+/// Display full details for a single ICP neuron
+fn display_icp_neuron_details(neuron: &crate::core::declarations::icp_governance::Neuron) {
+    use crate::core::declarations::icp_governance::DissolveState;
+
+    print_header("ICP Neuron Details");
+
+    // Neuron ID
+    if let Some(id) = &neuron.id {
+        print_info(&format!("Neuron ID: {}", id.id));
+    } else {
+        print_info("Neuron ID: <none>");
+    }
+
+    // Controller
+    if let Some(controller) = &neuron.controller {
+        print_info(&format!("Controller: {}", controller));
+    }
+
+    // Stake information
+    println!();
+    print_info("Stake Information:");
+    println!("  Cached Stake: {} e8s", neuron.cached_neuron_stake_e8s);
+    if let Some(staked_maturity) = neuron.staked_maturity_e8s_equivalent {
+        println!("  Staked Maturity: {} e8s", staked_maturity);
+    }
+    println!("  Maturity: {} e8s", neuron.maturity_e8s_equivalent);
+
+    // Dissolve state
+    println!();
+    print_info("Dissolve State:");
+    match &neuron.dissolve_state {
+        Some(DissolveState::DissolveDelaySeconds(seconds)) => {
+            let days = *seconds / 86400;
+            let hours = (*seconds % 86400) / 3600;
+            println!("  Type: Dissolve Delay");
+            println!(
+                "  Delay: {} seconds ({} days, {} hours)",
+                seconds, days, hours
+            );
+        }
+        Some(DissolveState::WhenDissolvedTimestampSeconds(timestamp)) => {
+            println!("  Type: Dissolving");
+            println!("  Dissolves at timestamp: {}", timestamp);
+        }
+        None => {
+            println!("  Type: None");
+        }
+    }
+
+    // Aging
+    println!();
+    print_info("Aging:");
+    println!(
+        "  Aging since timestamp: {}",
+        neuron.aging_since_timestamp_seconds
+    );
+    println!("  Created timestamp: {}", neuron.created_timestamp_seconds);
+
+    // Voting power
+    println!();
+    if let Some(voting_power) = neuron.deciding_voting_power {
+        print_info(&format!("Deciding Voting Power: {} e8s", voting_power));
+    }
+    if let Some(potential_power) = neuron.potential_voting_power {
+        print_info(&format!("Potential Voting Power: {} e8s", potential_power));
+    }
+
+    // Hotkeys
+    println!();
+    print_info("Hotkeys:");
+    if neuron.hot_keys.is_empty() {
+        println!("  None");
+    } else {
+        for (i, hotkey) in neuron.hot_keys.iter().enumerate() {
+            println!("  [{}] {}", i + 1, hotkey);
+        }
+    }
+
+    // Visibility
+    if let Some(visibility) = neuron.visibility {
+        println!();
+        print_info(&format!(
+            "Visibility: {}",
+            if visibility == 0 { "Public" } else { "Private" }
+        ));
+    }
+
+    // KYC
+    println!();
+    print_info(&format!("KYC Verified: {}", neuron.kyc_verified));
+
+    // Auto stake maturity
+    if let Some(auto_stake) = neuron.auto_stake_maturity {
+        println!();
+        print_info(&format!("Auto Stake Maturity: {}", auto_stake));
+    }
+
+    println!();
+}
+
 /// Handle get-icp-balance command
 pub async fn handle_get_icp_balance(args: &[String]) -> Result<()> {
     use crate::core::ops::identity::create_agent;
     use crate::core::utils::constants::LEDGER_CANISTER;
     use std::io::{self, Write};
 
-    // Step 1: Get principal (interactive if not provided)
+    // Step 1: Get principal (select participant if not provided)
     let principal = if args.len() >= 3 {
         Principal::from_text(&args[2]).context("Failed to parse principal")?
     } else {
-        // Try to use default dfx identity principal
-        use crate::core::ops::identity::load_dfx_identity;
-        match load_dfx_identity(None)
-            .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
-        {
+        // Try to select participant, or use dfx identity as fallback
+        match select_participant() {
             Ok(p) => p,
             Err(_) => {
-                print_header("Get ICP Balance");
-                print!("Enter principal: ");
-                io::stdout().flush()?;
-                let mut input = String::new();
-                io::stdin().read_line(&mut input)?;
-                Principal::from_text(input.trim()).context("Failed to parse principal")?
+                // Fallback to dfx identity principal
+                use crate::core::ops::identity::load_dfx_identity;
+                match load_dfx_identity(None)
+                    .and_then(|identity| identity.sender().map_err(|e| anyhow::anyhow!(e)))
+                {
+                    Ok(p) => p,
+                    Err(_) => {
+                        print_header("Get ICP Balance");
+                        print!("Enter principal: ");
+                        io::stdout().flush()?;
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input)?;
+                        Principal::from_text(input.trim()).context("Failed to parse principal")?
+                    }
+                }
             }
         }
     };
@@ -1743,4 +2019,312 @@ pub async fn handle_check_sns_deployed(_args: &[String]) -> Result<()> {
         // Exit with 1 if not deployed
         std::process::exit(1);
     }
+}
+
+/// Select an ICP neuron interactively from a list
+async fn select_icp_neuron(principal: Principal) -> Result<u64> {
+    use crate::core::ops::governance_ops::list_icp_neurons_for_principal_default_path;
+    use std::io::{self, Write};
+
+    let neurons = list_icp_neurons_for_principal_default_path(principal)
+        .await
+        .context("Failed to list ICP neurons")?;
+
+    if neurons.is_empty() {
+        anyhow::bail!("No ICP neurons found for principal {}", principal);
+    }
+
+    println!("\nAvailable ICP Neurons:");
+    for (idx, neuron) in neurons.iter().enumerate() {
+        let neuron_id = neuron.id.as_ref().map(|n| n.id).unwrap_or(0);
+        let stake = neuron.cached_neuron_stake_e8s;
+        let dissolve_delay = match &neuron.dissolve_state {
+            Some(crate::core::declarations::icp_governance::DissolveState::DissolveDelaySeconds(
+                seconds,
+            )) => *seconds,
+            Some(crate::core::declarations::icp_governance::DissolveState::WhenDissolvedTimestampSeconds(_)) => {
+                0 // Dissolving
+            }
+            None => u64::MAX, // No state
+        };
+
+        let days = dissolve_delay / 86400;
+        let hours = (dissolve_delay % 86400) / 3600;
+        let dissolve_str = if dissolve_delay == 0 {
+            "Dissolving".to_string()
+        } else if dissolve_delay == u64::MAX {
+            "No delay".to_string()
+        } else {
+            format!("{}d {}h", days, hours)
+        };
+
+        println!(
+            "  {}: Neuron ID: {}, Stake: {} e8s, Dissolve Delay: {}",
+            idx + 1,
+            neuron_id,
+            stake,
+            dissolve_str
+        );
+    }
+
+    print!("\nSelect neuron number (1-{}): ", neurons.len());
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let selection: usize = input
+        .trim()
+        .parse()
+        .context("Invalid selection - must be a number")?;
+
+    if selection < 1 || selection > neurons.len() {
+        anyhow::bail!(
+            "Invalid selection - must be between 1 and {}",
+            neurons.len()
+        );
+    }
+
+    let selected_neuron = &neurons[selection - 1];
+    selected_neuron
+        .id
+        .as_ref()
+        .map(|n| n.id)
+        .ok_or_else(|| anyhow::anyhow!("Selected neuron has no ID"))
+}
+
+/// Handle disburse-icp-neuron command
+pub async fn handle_disburse_icp_neuron(args: &[String]) -> Result<()> {
+    use crate::core::ops::governance_ops::disburse_icp_neuron_for_principal_default_path;
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (select participant if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Step 2 & 3: Get neuron_id and receiver_principal
+    let (neuron_id, receiver_principal) = if args.len() >= 4 {
+        let arg3 = &args[3];
+        // Check if arg3 looks like a neuron_id (number)
+        if let Ok(id) = arg3.parse::<u64>() {
+            // arg3 is neuron_id
+            let neuron_id_val = Some(id);
+
+            // Get receiver_principal from next arg
+            let receiver = if args.len() >= 5 {
+                Principal::from_text(&args[4]).context("Failed to parse receiver principal")?
+            } else {
+                print!("Enter receiver principal: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Principal::from_text(input.trim()).context("Failed to parse receiver principal")?
+            };
+
+            (neuron_id_val, receiver)
+        } else {
+            // arg3 is receiver_principal, need to select neuron
+            let receiver =
+                Principal::from_text(arg3).context("Failed to parse receiver principal")?;
+            let neuron_id_val = Some(select_icp_neuron(principal).await?);
+            (neuron_id_val, receiver)
+        }
+    } else {
+        // Need to select neuron and get receiver interactively
+        let neuron_id_val = Some(select_icp_neuron(principal).await?);
+
+        print!("Enter receiver principal: ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        let receiver =
+            Principal::from_text(input.trim()).context("Failed to parse receiver principal")?;
+
+        (neuron_id_val, receiver)
+    };
+
+    // Step 4: Get amount (optional)
+    let amount_e8s = if args.len() >= 6 {
+        Some(
+            args[5]
+                .parse::<u64>()
+                .context("Failed to parse amount_e8s")?,
+        )
+    } else {
+        None // Full disbursement
+    };
+
+    print_header("Disbursing ICP Neuron");
+    print_info(&format!("Principal: {}", principal));
+    print_info(&format!("Receiver: {}", receiver_principal));
+    if let Some(id) = neuron_id {
+        print_info(&format!("Neuron ID: {}", id));
+    }
+    if let Some(amount) = amount_e8s {
+        print_info(&format!("Amount: {} e8s", amount));
+    } else {
+        print_info("Amount: Full neuron stake");
+    }
+
+    let block_height = disburse_icp_neuron_for_principal_default_path(
+        principal,
+        receiver_principal,
+        neuron_id,
+        amount_e8s,
+    )
+    .await
+    .context("Failed to disburse neuron")?;
+
+    print_success(&format!(
+        "Neuron disbursed successfully! Transfer block height: {}",
+        block_height
+    ));
+    Ok(())
+}
+
+/// Handle increase-icp-dissolve-delay command
+pub async fn handle_increase_icp_dissolve_delay(args: &[String]) -> Result<()> {
+    use crate::core::ops::governance_ops::increase_icp_dissolve_delay_for_principal_default_path;
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (select participant if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Step 2: Get neuron ID (select if not provided)
+    let neuron_id = if args.len() >= 4 {
+        Some(
+            args[3]
+                .parse::<u64>()
+                .context("Failed to parse neuron_id")?,
+        )
+    } else {
+        // Interactive neuron selection
+        Some(select_icp_neuron(principal).await?)
+    };
+
+    // Step 3: Get additional dissolve delay (interactive if not provided)
+    let additional_dissolve_delay_seconds = if args.len() >= 5 {
+        args[4]
+            .parse::<u64>()
+            .context("Failed to parse additional_dissolve_delay_seconds")?
+    } else {
+        // Interactive prompt
+        print_header("Increase ICP Neuron Dissolve Delay");
+        print_info(&format!("Principal: {}", principal));
+        if let Some(id) = neuron_id {
+            print_info(&format!("Neuron ID: {}", id));
+        }
+        println!();
+        print!("Enter additional dissolve delay in seconds (e.g., 2592000 for 30 days): ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        input
+            .trim()
+            .parse::<u64>()
+            .context("Failed to parse dissolve delay - must be a number")?
+    };
+
+    print_header("Increasing Dissolve Delay");
+    print_info(&format!("Principal: {}", principal));
+    if let Some(id) = neuron_id {
+        print_info(&format!("Neuron ID: {}", id));
+    }
+    let days = additional_dissolve_delay_seconds / 86400;
+    let hours = (additional_dissolve_delay_seconds % 86400) / 3600;
+    print_info(&format!(
+        "Additional Delay: {} seconds ({} days, {} hours)",
+        additional_dissolve_delay_seconds, days, hours
+    ));
+
+    increase_icp_dissolve_delay_for_principal_default_path(
+        principal,
+        neuron_id,
+        additional_dissolve_delay_seconds,
+    )
+    .await
+    .context("Failed to increase dissolve delay")?;
+
+    print_success("Dissolve delay increased successfully!");
+    Ok(())
+}
+
+/// Handle manage-icp-dissolving command
+pub async fn handle_manage_icp_dissolving(args: &[String]) -> Result<()> {
+    use crate::core::ops::governance_ops::manage_icp_dissolving_state_for_principal_default_path;
+    use std::io::{self, Write};
+
+    // Step 1: Get principal (select participant if not provided)
+    let principal = if args.len() >= 3 {
+        Principal::from_text(&args[2]).context("Failed to parse principal")?
+    } else {
+        select_participant()?
+    };
+
+    // Step 2: Get action (start/stop) - interactive if not provided
+    let start_dissolving = if args.len() >= 4 {
+        match args[3].to_lowercase().as_str() {
+            "start" | "true" | "1" => true,
+            "stop" | "false" | "0" => false,
+            _ => {
+                anyhow::bail!("Invalid action. Use 'start' or 'stop'");
+            }
+        }
+    } else {
+        // Interactive prompt
+        print_header("Manage ICP Neuron Dissolving State");
+        print_info(&format!("Principal: {}", principal));
+        println!();
+        println!("  [1] Start Dissolving");
+        println!("  [2] Stop Dissolving");
+        print!("Select action [1-2]: ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        match input.trim() {
+            "1" => true,
+            "2" => false,
+            _ => anyhow::bail!("Invalid selection - must be 1 or 2"),
+        }
+    };
+
+    // Step 3: Get neuron ID (select if not provided)
+    let neuron_id = if args.len() >= 5 {
+        Some(
+            args[4]
+                .parse::<u64>()
+                .context("Failed to parse neuron_id")?,
+        )
+    } else {
+        // Interactive neuron selection
+        Some(select_icp_neuron(principal).await?)
+    };
+
+    print_header(if start_dissolving {
+        "Starting Dissolving"
+    } else {
+        "Stopping Dissolving"
+    });
+    print_info(&format!("Principal: {}", principal));
+    if let Some(id) = neuron_id {
+        print_info(&format!("Neuron ID: {}", id));
+    }
+
+    manage_icp_dissolving_state_for_principal_default_path(principal, neuron_id, start_dissolving)
+        .await
+        .context("Failed to manage dissolving state")?;
+
+    print_success(if start_dissolving {
+        "Dissolving started successfully!"
+    } else {
+        "Dissolving stopped successfully!"
+    });
+    Ok(())
 }
