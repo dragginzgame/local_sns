@@ -274,13 +274,13 @@ pub async fn create_icp_neuron_default_path(
     memo: Option<u64>,
     dissolve_delay_seconds: Option<u64>,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
     use super::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
     use crate::core::utils::constants::{GOVERNANCE_CANISTER, ICP_TRANSFER_FEE, LEDGER_CANISTER};
     use crate::core::utils::data_output;
     use std::path::PathBuf;
 
-    // Try to load participant identity from deployment data, fallback to dfx identity
+    // Try to load participant identity from deployment data, fallback to icp-cli identity
     let identity = {
         let deployment_path = data_output::get_output_path();
         if deployment_path.exists() {
@@ -290,8 +290,8 @@ pub async fn create_icp_neuron_default_path(
                 {
                     // Check if principal is the owner
                     if deployment_data.owner_principal == principal.to_string() {
-                        // Owner uses dfx identity
-                        load_dfx_identity(None).context("Failed to load dfx identity")?
+                        // Owner uses icp-cli identity
+                        load_icp_identity(None).context("Failed to load icp-cli identity")?
                     } else if let Some(participant_data) = deployment_data
                         .participants
                         .iter()
@@ -302,24 +302,24 @@ pub async fn create_icp_neuron_default_path(
                         if let Ok(participant_identity) = load_identity_from_seed_file(&seed_path) {
                             participant_identity
                         } else {
-                            // Fallback to dfx identity
-                            load_dfx_identity(None).context("Failed to load dfx identity")?
+                            // Fallback to icp-cli identity
+                            load_icp_identity(None).context("Failed to load icp-cli identity")?
                         }
                     } else {
-                        // Principal not found in participants or owner, use dfx identity
-                        load_dfx_identity(None).context("Failed to load dfx identity")?
+                        // Principal not found in participants or owner, use icp-cli identity
+                        load_icp_identity(None).context("Failed to load icp-cli identity")?
                     }
                 } else {
-                    // Failed to parse deployment data, use dfx identity
-                    load_dfx_identity(None).context("Failed to load dfx identity")?
+                    // Failed to parse deployment data, use icp-cli identity
+                    load_icp_identity(None).context("Failed to load icp-cli identity")?
                 }
             } else {
-                // Failed to read deployment data, use dfx identity
-                load_dfx_identity(None).context("Failed to load dfx identity")?
+                // Failed to read deployment data, use icp-cli identity
+                load_icp_identity(None).context("Failed to load icp-cli identity")?
             }
         } else {
-            // No deployment data, use dfx identity
-            load_dfx_identity(None).context("Failed to load dfx identity")?
+            // No deployment data, use icp-cli identity
+            load_icp_identity(None).context("Failed to load icp-cli identity")?
         }
     };
 
@@ -434,17 +434,17 @@ pub async fn list_icp_neurons_for_principal(
 }
 
 /// High-level function to list ICP neurons for a principal
-/// This loads the identity for the principal (from deployment data if available, otherwise dfx identity)
+/// This loads the identity for the principal (from deployment data if available, otherwise icp-cli identity)
 /// ICP neurons are protected and require authentication
 pub async fn list_icp_neurons_for_principal_default_path(
     principal: Principal,
 ) -> Result<Vec<super::super::declarations::icp_governance::Neuron>> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
     use crate::core::utils::constants::GOVERNANCE_CANISTER;
     use crate::core::utils::data_output;
     use std::path::PathBuf;
 
-    // Try to load participant identity from deployment data, fallback to dfx identity
+    // Try to load participant identity from deployment data, fallback to icp-cli identity
     let identity = {
         let deployment_path = data_output::get_output_path();
         if deployment_path.exists() {
@@ -454,8 +454,8 @@ pub async fn list_icp_neurons_for_principal_default_path(
                 {
                     // Check if principal is the owner
                     if deployment_data.owner_principal == principal.to_string() {
-                        // Owner uses dfx identity
-                        load_dfx_identity(None).context("Failed to load dfx identity")?
+                        // Owner uses icp-cli identity
+                        load_icp_identity(None).context("Failed to load icp-cli identity")?
                     } else if let Some(participant_data) = deployment_data
                         .participants
                         .iter()
@@ -466,24 +466,24 @@ pub async fn list_icp_neurons_for_principal_default_path(
                         if let Ok(participant_identity) = load_identity_from_seed_file(&seed_path) {
                             participant_identity
                         } else {
-                            // Fallback to dfx identity
-                            load_dfx_identity(None).context("Failed to load dfx identity")?
+                            // Fallback to icp-cli identity
+                            load_icp_identity(None).context("Failed to load icp-cli identity")?
                         }
                     } else {
-                        // Principal not found in participants or owner, use dfx identity
-                        load_dfx_identity(None).context("Failed to load dfx identity")?
+                        // Principal not found in participants or owner, use icp-cli identity
+                        load_icp_identity(None).context("Failed to load icp-cli identity")?
                     }
                 } else {
-                    // Failed to parse deployment data, use dfx identity
-                    load_dfx_identity(None).context("Failed to load dfx identity")?
+                    // Failed to parse deployment data, use icp-cli identity
+                    load_icp_identity(None).context("Failed to load icp-cli identity")?
                 }
             } else {
-                // Failed to read deployment data, use dfx identity
-                load_dfx_identity(None).context("Failed to load dfx identity")?
+                // Failed to read deployment data, use icp-cli identity
+                load_icp_identity(None).context("Failed to load icp-cli identity")?
             }
         } else {
-            // No deployment data, use dfx identity
-            load_dfx_identity(None).context("Failed to load dfx identity")?
+            // No deployment data, use icp-cli identity
+            load_icp_identity(None).context("Failed to load icp-cli identity")?
         }
     };
 
@@ -535,7 +535,7 @@ pub async fn get_icp_neuron(
 pub async fn get_icp_neuron_default_path(
     neuron_id: Option<u64>,
 ) -> Result<super::super::declarations::icp_governance::Neuron> {
-    use super::identity::{create_agent, load_dfx_identity};
+    use super::identity::{create_agent, load_icp_identity};
 
     let id = if let Some(id) = neuron_id {
         id
@@ -550,8 +550,8 @@ pub async fn get_icp_neuron_default_path(
         deployment_data.icp_neuron_id
     };
 
-    // Load owner identity (default dfx identity) - get_full_neuron requires authentication
-    let identity = load_dfx_identity(None).context("Failed to load owner dfx identity")?;
+    // Load owner identity (default icp-cli identity) - get_full_neuron requires authentication
+    let identity = load_icp_identity(None).context("Failed to load owner icp-cli identity")?;
 
     // Create authenticated agent
     let agent = create_agent(identity)
@@ -700,14 +700,14 @@ pub async fn increase_icp_dissolve_delay(
 }
 
 /// High-level function to disburse an ICP neuron for a principal
-/// This reads deployment data, loads the participant identity (or dfx), and disburses the neuron
+/// This reads deployment data, loads the participant identity (or icp-cli), and disburses the neuron
 pub async fn disburse_icp_neuron_for_principal_default_path(
     principal: Principal,
     receiver_principal: Principal,
     neuron_id: Option<u64>,
     amount_e8s: Option<u64>,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
     use crate::core::utils::{constants::GOVERNANCE_CANISTER, data_output::get_output_path};
     use std::fs;
 
@@ -733,12 +733,12 @@ pub async fn disburse_icp_neuron_for_principal_default_path(
             }
         }
         found_identity.unwrap_or_else(|| {
-            load_dfx_identity(None)
-                .context("Failed to load dfx identity")
-                .expect("Failed to load dfx identity as fallback")
+            load_icp_identity(None)
+                .context("Failed to load icp-cli identity")
+                .expect("Failed to load icp-cli identity as fallback")
         })
     } else {
-        load_dfx_identity(None).context("Failed to load dfx identity")?
+        load_icp_identity(None).context("Failed to load icp-cli identity")?
     };
 
     let agent = create_agent(identity)
@@ -781,7 +781,7 @@ pub async fn increase_icp_dissolve_delay_for_principal_default_path(
     neuron_id: Option<u64>,
     additional_dissolve_delay_seconds: u64,
 ) -> Result<()> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
     use crate::core::utils::{constants::GOVERNANCE_CANISTER, data_output::get_output_path};
     use std::fs;
 
@@ -807,12 +807,12 @@ pub async fn increase_icp_dissolve_delay_for_principal_default_path(
             }
         }
         found_identity.unwrap_or_else(|| {
-            load_dfx_identity(None)
-                .context("Failed to load dfx identity")
-                .expect("Failed to load dfx identity as fallback")
+            load_icp_identity(None)
+                .context("Failed to load icp-cli identity")
+                .expect("Failed to load icp-cli identity as fallback")
         })
     } else {
-        load_dfx_identity(None).context("Failed to load dfx identity")?
+        load_icp_identity(None).context("Failed to load icp-cli identity")?
     };
 
     let agent = create_agent(identity)
@@ -854,7 +854,7 @@ pub async fn manage_icp_dissolving_state_for_principal_default_path(
     neuron_id: Option<u64>,
     start_dissolving: bool,
 ) -> Result<()> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
     use crate::core::utils::{constants::GOVERNANCE_CANISTER, data_output::get_output_path};
     use std::fs;
 
@@ -880,12 +880,12 @@ pub async fn manage_icp_dissolving_state_for_principal_default_path(
             }
         }
         found_identity.unwrap_or_else(|| {
-            load_dfx_identity(None)
-                .context("Failed to load dfx identity")
-                .expect("Failed to load dfx identity as fallback")
+            load_icp_identity(None)
+                .context("Failed to load icp-cli identity")
+                .expect("Failed to load icp-cli identity as fallback")
         })
     } else {
-        load_dfx_identity(None).context("Failed to load dfx identity")?
+        load_icp_identity(None).context("Failed to load icp-cli identity")?
     };
 
     let agent = create_agent(identity)

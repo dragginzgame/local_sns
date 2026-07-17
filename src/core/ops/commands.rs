@@ -892,7 +892,7 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
             // Use the low-level function with principal-based identity loading
             use crate::core::ops::governance_ops::add_hotkey_to_icp_neuron;
             use crate::core::ops::identity::{
-                create_agent, load_dfx_identity, load_identity_from_seed_file,
+                create_agent, load_icp_identity, load_identity_from_seed_file,
             };
             use crate::core::utils::constants::GOVERNANCE_CANISTER;
             use crate::core::utils::data_output::SnsCreationData;
@@ -906,7 +906,8 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                     {
                         // Check if principal matches owner or any participant
                         if principal.to_text() == deployment_data.owner_principal {
-                            load_dfx_identity(None).context("Failed to load owner dfx identity")?
+                            load_icp_identity(None)
+                                .context("Failed to load owner icp-cli identity")?
                         } else if let Some(participant) = deployment_data
                             .participants
                             .iter()
@@ -916,17 +917,17 @@ pub async fn handle_add_hotkey(args: &[String]) -> Result<()> {
                             load_identity_from_seed_file(&PathBuf::from(&participant.seed_file))
                                 .context("Failed to load participant identity")?
                         } else {
-                            // Custom principal, try dfx identity
-                            load_dfx_identity(None).context("Failed to load dfx identity")?
+                            // Custom principal, try icp-cli identity
+                            load_icp_identity(None).context("Failed to load icp-cli identity")?
                         }
                     } else {
-                        load_dfx_identity(None).context("Failed to load dfx identity")?
+                        load_icp_identity(None).context("Failed to load icp-cli identity")?
                     }
                 } else {
-                    load_dfx_identity(None).context("Failed to load dfx identity")?
+                    load_icp_identity(None).context("Failed to load icp-cli identity")?
                 }
             } else {
-                load_dfx_identity(None).context("Failed to load dfx identity")?
+                load_icp_identity(None).context("Failed to load icp-cli identity")?
             };
 
             let agent = create_agent(identity)
@@ -1334,7 +1335,7 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
     // Use the function that accepts neuron_id with principal-based identity loading
     use crate::core::ops::governance_ops::set_neuron_visibility;
     use crate::core::ops::identity::{
-        create_agent, load_dfx_identity, load_identity_from_seed_file,
+        create_agent, load_icp_identity, load_identity_from_seed_file,
     };
     use crate::core::utils::constants::GOVERNANCE_CANISTER;
     use crate::core::utils::data_output::SnsCreationData;
@@ -1346,7 +1347,7 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
             if let Ok(deployment_data) = serde_json::from_str::<SnsCreationData>(&data_content) {
                 // Check if principal matches owner or any participant
                 if principal.to_text() == deployment_data.owner_principal {
-                    load_dfx_identity(None).context("Failed to load owner dfx identity")?
+                    load_icp_identity(None).context("Failed to load owner icp-cli identity")?
                 } else if let Some(participant) = deployment_data
                     .participants
                     .iter()
@@ -1356,17 +1357,17 @@ pub async fn handle_set_icp_visibility(args: &[String]) -> Result<()> {
                     load_identity_from_seed_file(&PathBuf::from(&participant.seed_file))
                         .context("Failed to load participant identity")?
                 } else {
-                    // Custom principal, try dfx identity
-                    load_dfx_identity(None).context("Failed to load dfx identity")?
+                    // Custom principal, try icp-cli identity
+                    load_icp_identity(None).context("Failed to load icp-cli identity")?
                 }
             } else {
-                load_dfx_identity(None).context("Failed to load dfx identity")?
+                load_icp_identity(None).context("Failed to load icp-cli identity")?
             }
         } else {
-            load_dfx_identity(None).context("Failed to load dfx identity")?
+            load_icp_identity(None).context("Failed to load icp-cli identity")?
         }
     } else {
-        load_dfx_identity(None).context("Failed to load dfx identity")?
+        load_icp_identity(None).context("Failed to load icp-cli identity")?
     };
 
     let agent = create_agent(identity)

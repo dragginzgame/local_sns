@@ -1,6 +1,7 @@
 # Generated files
 generated/
 .dfx/
+.icp/
 # Rust build artifacts
 target/
 Cargo.lock
@@ -15,4 +16,3 @@ Cargo.lock
 # OS files
 .DS_Store
 Thumbs.db
-

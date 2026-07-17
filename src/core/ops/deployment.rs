@@ -9,8 +9,10 @@ use std::time::Duration as StdDuration;
 
 use crate::core::declarations::icp_ledger::Account as LedgerAccount;
 use crate::core::declarations::sns_swap::GetLifecycleResponse;
-use crate::core::ops::governance_ops::{claim_neuron, create_sns_proposal, set_dissolve_delay, set_neuron_visibility};
-use crate::core::ops::identity::{create_agent, load_dfx_identity, load_minting_identity};
+use crate::core::ops::governance_ops::{
+    claim_neuron, create_sns_proposal, set_dissolve_delay, set_neuron_visibility,
+};
+use crate::core::ops::identity::{create_agent, load_icp_identity, load_minting_identity};
 use crate::core::ops::ledger_ops::{generate_subaccount_by_nonce, transfer_icp};
 use crate::core::ops::snsw_ops::get_deployed_sns;
 use crate::core::ops::swap_ops::{
@@ -32,10 +34,10 @@ pub struct DeploymentContext {
 
 /// Initialize deployment context (load identities, create agents, parse canisters)
 pub async fn initialize_deployment_context() -> Result<DeploymentContext> {
-    print_step("Loading dfx identity...");
-    let identity = load_dfx_identity(None)
-        .context("Failed to load dfx identity. Make sure dfx is configured.")?;
-    print_success("Dfx identity loaded");
+    print_step("Loading icp-cli identity...");
+    let identity = load_icp_identity(None)
+        .context("Failed to load icp-cli identity. Make sure icp-cli is configured.")?;
+    print_success("icp-cli identity loaded");
 
     print_step("Creating agent...");
     let agent = create_agent(identity).await?;
@@ -141,7 +143,7 @@ pub async fn configure_neuron(ctx: &DeploymentContext, neuron_id: u64) -> Result
     .await
     .context("Failed to set dissolve delay")?;
     print_success("Dissolve delay set");
-    
+
     print_header("Setting Neuron Visibility");
     print_step("Setting neuron visibility to public...");
     set_neuron_visibility(
@@ -153,7 +155,7 @@ pub async fn configure_neuron(ctx: &DeploymentContext, neuron_id: u64) -> Result
     .await
     .context("Failed to set neuron visibility")?;
     print_success("Neuron visibility set to public");
-    
+
     Ok(())
 }
 
@@ -696,7 +698,7 @@ pub async fn write_deployment_data(
 /// Main SNS deployment function - orchestrates the complete deployment flow
 pub async fn deploy_sns() -> Result<()> {
     // Main SNS deployment flow
-    println!("🚀 Starting SNS creation on local dfx network\n");
+    println!("🚀 Starting SNS creation on local icp-cli network\n");
 
     // Initialize deployment context
     let ctx = initialize_deployment_context().await?;

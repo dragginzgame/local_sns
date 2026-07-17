@@ -6,12 +6,12 @@
 #
 # Arguments (all optional - interactive prompts if not provided):
 #   principal       - Optional: Principal to query balance for
-#                     If not provided, uses default dfx identity principal or prompts
+#                     If not provided, uses default icp-cli identity principal or prompts
 #   subaccount_hex  - Optional: Subaccount in hex format
 #                     If not provided, queries default account (no subaccount)
 #
 # Interactive flow:
-#   1. Enter principal (if not provided and not using dfx identity)
+#   1. Enter principal (if not provided and not using icp-cli identity)
 #   2. Enter subaccount (if not provided, uses default account)
 #
 # Example:
@@ -59,11 +59,10 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-# Check if dfx is running
-if ! dfx ping >/dev/null 2>&1; then
-    print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-    exit 1
-fi
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
+# Check if an icp-cli network or compatible replica is reachable
+ensure_icp_network || exit 1
 
 print_header "Get ICP Balance"
 

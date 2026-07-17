@@ -176,7 +176,7 @@ pub async fn add_hotkey_to_participant_neuron(
     permission_types: Option<Vec<i32>>,
     neuron_id: Option<Vec<u8>>,
 ) -> Result<()> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -188,11 +188,10 @@ pub async fn add_hotkey_to_participant_neuron(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    // Load identity - check if owner first, then participants, then try icp-cli for custom principals
     let identity = if participant_principal.to_text() == deployment_data.owner_principal {
-        // Owner - use dfx identity
-        load_dfx_identity(None)
-            .context("Failed to load owner dfx identity")?
+        // Owner - use icp-cli identity
+        load_icp_identity(None).context("Failed to load owner icp-cli identity")?
     } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
@@ -203,9 +202,8 @@ pub async fn add_hotkey_to_participant_neuron(
         load_identity_from_seed_file(&seed_path)
             .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Custom principal - try dfx identity as fallback
-        load_dfx_identity(None)
-            .context("Failed to load dfx identity for custom principal")?
+        // Custom principal - try icp-cli identity as fallback
+        load_icp_identity(None).context("Failed to load icp-cli identity for custom principal")?
     };
 
     // Create authenticated agent
@@ -353,7 +351,7 @@ pub async fn disburse_participant_neuron(
     receiver_principal: Principal,
     neuron_id: Option<Vec<u8>>,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -365,11 +363,10 @@ pub async fn disburse_participant_neuron(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Load identity - check if owner first, then participants, then try dfx for custom principals
+    // Load identity - check if owner first, then participants, then try icp-cli for custom principals
     let identity = if participant_principal.to_text() == deployment_data.owner_principal {
-        // Owner - use dfx identity
-        load_dfx_identity(None)
-            .context("Failed to load owner dfx identity")?
+        // Owner - use icp-cli identity
+        load_icp_identity(None).context("Failed to load owner icp-cli identity")?
     } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
@@ -380,9 +377,8 @@ pub async fn disburse_participant_neuron(
         load_identity_from_seed_file(&seed_path)
             .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Custom principal - try dfx identity as fallback
-        load_dfx_identity(None)
-            .context("Failed to load dfx identity for custom principal")?
+        // Custom principal - try icp-cli identity as fallback
+        load_icp_identity(None).context("Failed to load icp-cli identity for custom principal")?
     };
 
     // Create authenticated agent
@@ -575,7 +571,7 @@ pub async fn mint_sns_tokens_with_all_votes(
     receiver_principal: Principal,
     amount_e8s: u64,
 ) -> Result<u64> {
-    use super::identity::{create_agent, load_dfx_identity, load_identity_from_seed_file};
+    use super::identity::{create_agent, load_icp_identity, load_identity_from_seed_file};
 
     // Read deployment data
     let data_content = std::fs::read_to_string(deployment_data_path).with_context(|| {
@@ -587,11 +583,10 @@ pub async fn mint_sns_tokens_with_all_votes(
     let deployment_data: crate::core::utils::data_output::SnsCreationData =
         serde_json::from_str(&data_content).context("Failed to parse deployment data JSON")?;
 
-    // Load proposer identity - check if owner first, then participants, then try dfx for custom principals
+    // Load proposer identity - check if owner first, then participants, then try icp-cli for custom principals
     let proposer_identity = if proposer_principal.to_text() == deployment_data.owner_principal {
-        // Owner - use dfx identity
-        load_dfx_identity(None)
-            .context("Failed to load owner dfx identity")?
+        // Owner - use icp-cli identity
+        load_icp_identity(None).context("Failed to load owner icp-cli identity")?
     } else if let Some(proposer_data) = deployment_data
         .participants
         .iter()
@@ -602,9 +597,8 @@ pub async fn mint_sns_tokens_with_all_votes(
         load_identity_from_seed_file(&seed_path)
             .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Custom principal - try dfx identity as fallback
-        load_dfx_identity(None)
-            .context("Failed to load dfx identity for custom principal")?
+        // Custom principal - try icp-cli identity as fallback
+        load_icp_identity(None).context("Failed to load icp-cli identity for custom principal")?
     };
 
     // Create authenticated agent for proposer
@@ -936,12 +930,11 @@ pub async fn increase_dissolve_delay_participant_neuron_default_path(
         .and_then(|s| Principal::from_text(s).ok())
         .context("Failed to parse governance canister ID from deployment data")?;
 
-    // Load identity - check if owner first, then participants, then try dfx for custom principals
-    use super::identity::load_dfx_identity;
+    // Load identity - check if owner first, then participants, then try icp-cli for custom principals
+    use super::identity::load_icp_identity;
     let identity = if participant_principal.to_text() == deployment_data.owner_principal {
-        // Owner - use dfx identity
-        load_dfx_identity(None)
-            .context("Failed to load owner dfx identity")?
+        // Owner - use icp-cli identity
+        load_icp_identity(None).context("Failed to load owner icp-cli identity")?
     } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
@@ -952,9 +945,8 @@ pub async fn increase_dissolve_delay_participant_neuron_default_path(
         load_identity_from_seed_file(&seed_path)
             .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Custom principal - try dfx identity as fallback
-        load_dfx_identity(None)
-            .context("Failed to load dfx identity for custom principal")?
+        // Custom principal - try icp-cli identity as fallback
+        load_icp_identity(None).context("Failed to load icp-cli identity for custom principal")?
     };
     let agent = create_agent(identity)
         .await
@@ -1026,12 +1018,11 @@ pub async fn manage_dissolving_state_participant_neuron_default_path(
         .and_then(|s| Principal::from_text(s).ok())
         .context("Failed to parse governance canister ID from deployment data")?;
 
-    // Load identity - check if owner first, then participants, then try dfx for custom principals
-    use super::identity::load_dfx_identity;
+    // Load identity - check if owner first, then participants, then try icp-cli for custom principals
+    use super::identity::load_icp_identity;
     let identity = if participant_principal.to_text() == deployment_data.owner_principal {
-        // Owner - use dfx identity
-        load_dfx_identity(None)
-            .context("Failed to load owner dfx identity")?
+        // Owner - use icp-cli identity
+        load_icp_identity(None).context("Failed to load owner icp-cli identity")?
     } else if let Some(participant_data) = deployment_data
         .participants
         .iter()
@@ -1042,9 +1033,8 @@ pub async fn manage_dissolving_state_participant_neuron_default_path(
         load_identity_from_seed_file(&seed_path)
             .with_context(|| format!("Failed to load identity from: {}", seed_path.display()))?
     } else {
-        // Custom principal - try dfx identity as fallback
-        load_dfx_identity(None)
-            .context("Failed to load dfx identity for custom principal")?
+        // Custom principal - try icp-cli identity as fallback
+        load_icp_identity(None).context("Failed to load icp-cli identity for custom principal")?
     };
     let agent = create_agent(identity)
         .await
@@ -1160,13 +1150,13 @@ pub async fn create_sns_neuron(
             .await
             .context("Failed to create agent with participant identity")?
     } else {
-        // Try to load as dfx identity
-        use super::identity::load_dfx_identity;
+        // Try to load as the selected icp-cli identity
+        use super::identity::load_icp_identity;
         let identity =
-            load_dfx_identity(Some("default")).context("Failed to load dfx identity 'default'")?;
+            load_icp_identity(None).context("Failed to load default icp-cli identity")?;
         create_agent(identity)
             .await
-            .context("Failed to create agent with dfx identity")?
+            .context("Failed to create agent with icp-cli identity")?
     };
 
     // Get minimum stake and transfer fee

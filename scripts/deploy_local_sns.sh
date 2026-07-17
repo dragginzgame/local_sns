@@ -5,7 +5,7 @@
 #   bash scripts/deploy_local_sns.sh
 #
 # Prerequisites:
-#   - dfx start --clean --system-canisters
+#   - icp network start -d
 #   - Rust toolchain installed
 #   - Sufficient ICP balance for owner (via minting account)
 
@@ -49,19 +49,18 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
 print_header "Local SNS Deployment"
 
-# Check if dfx is running
-if ! dfx ping >/dev/null 2>&1; then
-    print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-    exit 1
-fi
+# Check if an icp-cli network or compatible replica is reachable
+ensure_icp_network || exit 1
 
-print_success "dfx is running"
+print_success "ICP replica is reachable"
 
 # Run the deployment
 print_header "Starting SNS Deployment"
-print_info "This will create an SNS on your local dfx network..."
+print_info "This will create an SNS on the configured local ICP replica..."
 echo ""
 
 cargo run --bin local_sns -- deploy-sns
