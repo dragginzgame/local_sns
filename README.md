@@ -1,8 +1,8 @@
 # Local SNS Deployment Tool
 
-> **Important**: Requires dfx version 0.30.1 or higher that supports the `--system-canisters` flag
+> **Important**: Requires `icp-cli` and a local managed network with NNS/SNS canisters enabled.
 
-Standalone Rust tool for deploying and managing Service Nervous System (SNS) instances on local `dfx` networks.
+Standalone Rust tool for deploying and managing Service Nervous System (SNS) instances on local `icp-cli` networks.
 
 This directory is self-contained and can be copied to a separate repository. All dependencies are specified in `Cargo.toml`, and all generated files are stored in the `generated/` directory.
 
@@ -11,6 +11,7 @@ This directory is self-contained and can be copied to a separate repository. All
 ```
 local_sns/
 ├── Cargo.toml              # Standalone Rust package configuration
+├── icp.yaml                # icp-cli local network configuration
 ├── README.md               # This file
 ├── .gitignore             # Git ignore rules for generated files
 ├── src/                   # Rust source code
@@ -70,14 +71,29 @@ local_sns/
 ## Prerequisites
 
 - **Rust toolchain**: Install from [rustup.rs](https://rustup.rs/)
-- **dfx SDK**: Internet Computer SDK version **0.30.1 or higher** that supports the `--system-canisters` flag
-- **Local dfx network**: Must be running with system canisters
+- **icp-cli**: Install from the [ICP CLI documentation](https://cli.internetcomputer.org/0.2/guides/installation/)
+- **Local icp-cli network**: Must be running from this project root
 
   ```bash
-  dfx start --clean --system-canisters
+  icp network start -d
   ```
 
-  > **Note**: The `--system-canisters` flag is required. Older versions of dfx do not support this flag.
+  The included `icp.yaml` **must** set `nns: true` on the local network — this is
+  what installs the NNS/SNS system canisters (governance, ICP ledger, sns-wasm) that
+  the deployment depends on:
+
+  ```yaml
+  networks:
+    - name: local
+      mode: managed
+      nns: true          # required — installs the NNS/SNS system canisters
+  ```
+
+  Without `nns: true`, deployment fails at the neuron step with
+  `Canister rrkah-fqaaa-aaaaa-aaaaq-cai not found` because the governance canister
+  was never installed.
+
+  If another icp-cli project already has a compatible local replica running, the scripts can use it directly. By default they probe `http://127.0.0.1:8000`; set `LOCAL_SNS_REPLICA_URL` or `ICP_REPLICA_URL` if your gateway uses a different URL. That replica must also have been started with `nns: true`.
 
 ## Quick Start
 
@@ -702,9 +718,11 @@ Uses standard NNS canister IDs for local development:
 
 ## Identity Management
 
-- **Owner Identity**: Loaded from `~/.config/dfx/identity/default/identity.pem`
+- **Owner Identity**: Loaded through `icp identity default` and `icp identity export`
 - **Minting Identity**: Hardcoded PEM in `src/core/ops/identity.rs` (used for funding operations)
 - **Participant Identities**: Deterministic seeds saved to `generated/participants/` for reuse
+
+Set `LOCAL_SNS_ICP_IDENTITY=<identity-name>` or `ICP_IDENTITY=<identity-name>` to force a specific icp-cli identity instead of the current default.
 
 ## Principal Selection
 
@@ -716,9 +734,9 @@ When operations require selecting a principal (for both ICP and SNS operations),
 
 All SNS operations support:
 
-- Owner principal (uses dfx identity)
+- Owner principal (uses icp-cli identity)
 - Participant principals (uses seed file identities)
-- Custom principals (uses dfx identity as fallback)
+- Custom principals (uses icp-cli identity as fallback)
 
 This allows flexibility in managing neurons for any principal, not just those in the deployment data.
 
@@ -739,11 +757,11 @@ cargo build --release --bin local_sns    # Release build
 
 ## Testing
 
-Run the deployment script on a local dfx network:
+Run the deployment script on a local icp-cli network:
 
 ```bash
 # Start local network
-dfx start --clean --system-canisters
+icp network start -d
 
 # In another terminal, launch the interactive menu
 bash scripts/start.sh
@@ -861,7 +879,7 @@ This entire `local_sns/` directory is self-contained. To use it in another proje
 1. Copy the entire `local_sns/` directory to your repository
 2. Update paths if necessary (all paths are relative to the `local_sns/` root)
 3. Run `cargo build` to verify it compiles
-4. Ensure `dfx` is configured with system canisters
+4. Start the icp-cli local network with `icp network start -d`
 
 All generated files will be created in the `local_sns/generated/` directory.
 

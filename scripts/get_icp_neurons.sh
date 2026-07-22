@@ -53,11 +53,10 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-# Check if dfx is running
-if ! dfx ping >/dev/null 2>&1; then
-    print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-    exit 1
-fi
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
+# Check if an icp-cli network or compatible replica is reachable
+ensure_icp_network || exit 1
 
 print_header "List ICP Neurons"
 

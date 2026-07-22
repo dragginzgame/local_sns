@@ -5,8 +5,8 @@
 #   bash scripts/create_icp_neuron.sh [principal] [amount_e8s] [memo]
 #
 # Arguments (all optional - interactive prompts if not provided):
-#   principal  - Optional: Principal to create the neuron for (defaults to dfx identity principal)
-#               If not provided, uses default dfx identity
+#   principal  - Optional: Principal to create the neuron for (defaults to icp-cli identity principal)
+#               If not provided, uses default icp-cli identity
 #   amount_e8s - Optional: Amount of ICP to stake in e8s
 #               If not provided, prompts interactively
 #   memo       - Optional: Memo to use for neuron creation (defaults to 1)
@@ -61,11 +61,10 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-# Check if dfx is running
-if ! dfx ping >/dev/null 2>&1; then
-    print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-    exit 1
-fi
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
+# Check if an icp-cli network or compatible replica is reachable
+ensure_icp_network || exit 1
 
 print_header "Create ICP Neuron"
 

@@ -23,7 +23,7 @@
 #   bash scripts/disburse_sns_neuron.sh 2laou-ygqmf-... 0xabcd1234... receiver-principal-...
 
 # to check the balance of a principal, use the following command:
-# dfx canister call LEDGER_CANISTER_ID icrc1_balance_of '(record {owner=principal "USER_PRINCIPAL"; subaccount=null})'
+# icp canister call LEDGER_CANISTER_ID icrc1_balance_of '(record {owner=principal "USER_PRINCIPAL"; subaccount=null})'
 
 set -euo pipefail
 
@@ -65,11 +65,10 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
-# Check if dfx is running
-if ! dfx ping >/dev/null 2>&1; then
-    print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-    exit 1
-fi
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
+# Check if an icp-cli network or compatible replica is reachable
+ensure_icp_network || exit 1
 
 # Check if deployment data exists
 DEPLOYMENT_DATA="$LOCAL_SNS_ROOT/generated/sns_deployment_data.json"

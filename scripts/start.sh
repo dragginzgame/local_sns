@@ -47,6 +47,8 @@ LOCAL_SNS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Change to local_sns root directory
 cd "$LOCAL_SNS_ROOT"
 
+source "$SCRIPT_DIR/lib/icp_network.sh"
+
 # Check if SNS is deployed via network call
 check_sns_deployed() {
     # Use Rust binary to check via network (suppress all output)
@@ -371,12 +373,9 @@ main() {
         fi
     fi
     
-    # Check if dfx is running (unless we're being called from another script)
-    if [ "${CHECK_DFX:-true}" = "true" ]; then
-        if ! dfx ping >/dev/null 2>&1; then
-            print_error "dfx is not running. Start it with: dfx start --clean --system-canisters"
-            exit 1
-        fi
+    # Check if an icp-cli network or compatible replica is reachable (unless disabled by the caller)
+    if [ "${CHECK_ICP_NETWORK:-true}" = "true" ]; then
+        ensure_icp_network || exit 1
     fi
     
     # If arguments are provided, run script directly (non-interactive mode)
@@ -541,5 +540,3 @@ main() {
 
 # Run main function
 main "$@"
-
-

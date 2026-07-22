@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
             _ => {
                 eprintln!("Unknown command: {}", args[1]);
                 eprintln!("\nAvailable commands:");
-                eprintln!("  deploy-sns          - Deploy a new SNS on local dfx network");
+                eprintln!("  deploy-sns          - Deploy a new SNS on local icp-cli network");
                 eprintln!("  add-hotkey          - Add a hotkey to an SNS or ICP neuron");
                 eprintln!("  list-sns-neurons    - List SNS neurons for a principal");
                 eprintln!("  list-icp-neurons    - List ICP neurons for a principal");
