@@ -78,9 +78,22 @@ local_sns/
   icp network start -d
   ```
 
-  The included `icp.yaml` enables NNS/SNS system canisters for the local network.
+  The included `icp.yaml` **must** set `nns: true` on the local network — this is
+  what installs the NNS/SNS system canisters (governance, ICP ledger, sns-wasm) that
+  the deployment depends on:
 
-  If another icp-cli project already has a compatible local replica running, the scripts can use it directly. By default they probe `http://127.0.0.1:8000`; set `LOCAL_SNS_REPLICA_URL` or `ICP_REPLICA_URL` if your gateway uses a different URL.
+  ```yaml
+  networks:
+    - name: local
+      mode: managed
+      nns: true          # required — installs the NNS/SNS system canisters
+  ```
+
+  Without `nns: true`, deployment fails at the neuron step with
+  `Canister rrkah-fqaaa-aaaaa-aaaaq-cai not found` because the governance canister
+  was never installed.
+
+  If another icp-cli project already has a compatible local replica running, the scripts can use it directly. By default they probe `http://127.0.0.1:8000`; set `LOCAL_SNS_REPLICA_URL` or `ICP_REPLICA_URL` if your gateway uses a different URL. That replica must also have been started with `nns: true`.
 
 ## Quick Start
 

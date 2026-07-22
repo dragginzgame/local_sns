@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use ic_agent::{Agent, Identity};
+use k256::pkcs8::DecodePrivateKey;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration as StdDuration;
@@ -34,10 +35,19 @@ fn run_icp_command(args: &[&str]) -> Result<String> {
 }
 
 fn parse_pem_identity(pem_content: &str, source: &str) -> Result<Box<dyn Identity>> {
+    // SEC1 format: `-----BEGIN EC PRIVATE KEY-----`
     if let Ok(identity) = ic_agent::identity::Secp256k1Identity::from_pem(pem_content) {
         return Ok(Box::new(identity) as Box<dyn Identity>);
     }
 
+    // PKCS#8 format: `-----BEGIN PRIVATE KEY-----`. This is what `icp identity export`
+    // emits for secp256k1 keys, which `Secp256k1Identity::from_pem` does not accept.
+    if let Ok(secret_key) = k256::SecretKey::from_pkcs8_pem(pem_content) {
+        let identity = ic_agent::identity::Secp256k1Identity::from_private_key(secret_key);
+        return Ok(Box::new(identity) as Box<dyn Identity>);
+    }
+
+    // Ed25519 (BasicIdentity handles both SEC1-style and PKCS#8 ed25519 keys).
     if let Ok(identity) = ic_agent::identity::BasicIdentity::from_pem(pem_content) {
         return Ok(Box::new(identity) as Box<dyn Identity>);
     }

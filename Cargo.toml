@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 candid = "0.10"
 ic-agent = { version = "0.45", features = ["pem"] }
+k256 = { version = "0.13", features = ["pkcs8"] }
 ic-ledger-types = "0.16"
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
